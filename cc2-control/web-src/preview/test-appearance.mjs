@@ -129,6 +129,10 @@ try {
   // Layout and widgets.
   await page.getByRole('tab', { name: 'Dashboard layout', exact: true }).click()
   await page.getByRole('button', { name: 'Create a custom layout', exact: true }).click()
+  // A long non-ASCII layout name is fitted to the printer's 64 UTF-8 bytes.
+  await page.locator('#layout-name').fill('Я'.repeat(40))
+  const layoutNameBytes = await page.locator('#layout-name').evaluate(el => new TextEncoder().encode(el.value).length)
+  assert(layoutNameBytes <= 64, `layout name is ${layoutNameBytes} bytes`)
   await page.getByRole('tab', { name: 'Widgets', exact: true }).click()
   const fans = page.locator('[data-widget="fans"]')
   await fans.getByRole('switch', { name: 'Fans', exact: true }).click()
@@ -200,6 +204,16 @@ try {
   })
   await page.getByText('This file is not a valid CC2 appearance export.', { exact: true }).waitFor()
   assert.equal(writes.length, writesBeforeBad, 'an invalid theme must not be written')
+
+  // An import whose profile would be dropped must not report success.
+  const writesBeforeBadImport = writes.length
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'bad-profile.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ format: 'cc2-appearance', version: 1, profiles: [{ name: 'No id' }] })),
+  })
+  await page.getByText('This file is not a valid CC2 appearance export.', { exact: true }).waitFor()
+  assert.equal(writes.length, writesBeforeBadImport, 'a lossy import must not write')
 
   // Reload keeps the stored appearance (the mock backend is the source of truth).
   await page.reload()

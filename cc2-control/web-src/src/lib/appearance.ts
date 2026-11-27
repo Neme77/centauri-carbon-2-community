@@ -1387,9 +1387,24 @@ export const importAppearance = async (raw: unknown) => {
   const doc = normalizeDoc(raw)
   /* normalizeDoc drops an invalid theme, profile or layout. An import must not
    * claim success while silently omitting part of the file. */
-  const rawDocument = raw as Record<string, unknown>
-  const declared = (key: string) => (Array.isArray(rawDocument[key]) ? (rawDocument[key] as unknown[]).length : 0)
-  if (declared('themes') > doc.themes.length || declared('profiles') > doc.profiles.length) {
+  const rawDocument = raw as Record<string, any>
+  const rawThemes: unknown[] = Array.isArray(rawDocument.themes) ? rawDocument.themes : []
+  const rawProfiles: unknown[] = Array.isArray(rawDocument.profiles) ? rawDocument.profiles : []
+  const rawLayouts: unknown[] =
+    isObject(rawDocument.dashboard) && Array.isArray(rawDocument.dashboard.layouts) ? rawDocument.dashboard.layouts : []
+  const lostTheme = rawThemes.some(item => {
+    const parsed = normalizeThemes([item])
+    return parsed.length !== 1 || !doc.themes.some(theme => theme.id === parsed[0].id)
+  })
+  const lostProfile = rawProfiles.some(item => {
+    const parsed = normalizeProfile(item)
+    return !parsed || !doc.profiles.some(profile => profile.id === parsed.id)
+  })
+  const lostLayout = rawLayouts.some(
+    item =>
+      isObject(item) && typeof item.id === 'string' && !doc.dashboard.layouts.some(layout => layout.id === item.id)
+  )
+  if (lostTheme || lostProfile || lostLayout) {
     notify(t('appearance.import_bad'), 'error')
     return false
   }

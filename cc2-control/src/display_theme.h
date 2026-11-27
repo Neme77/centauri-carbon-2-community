@@ -770,7 +770,23 @@ static int disp_backup_original(const disp_asset *asset) {
 static int disp_baseline_is_stale_and_safe(const disp_manifest *current) {
     char manifest[PATH_MAX_LOCAL];
     if (!disp_baseline_manifest(manifest, sizeof(manifest))) return 0;
-    if (!disp_regular(manifest)) return 1; /* nothing to discard */
+    if (!disp_regular(manifest)) {
+        /* No manifest: delete nothing if preserved files remain, because their
+         * targets cannot be verified. A truly empty baseline is a no-op. */
+        char dir[PATH_MAX_LOCAL];
+        int any = 0;
+        DIR *d = disp_baseline_dir(dir, sizeof(dir)) ? opendir(dir) : NULL;
+        if (d) {
+            struct dirent *entry;
+            while ((entry = readdir(d))) {
+                if (!disp_name_valid(entry->d_name)) continue;
+                char file[PATH_MAX_LOCAL];
+                if (disp_path_join(file, sizeof(file), dir, entry->d_name) && disp_regular(file)) any = 1;
+            }
+            closedir(d);
+        }
+        return any ? 0 : 1;
+    }
     disp_baseline_entry entries[DISP_MAX_STAGE];
     int count = 0;
     if (disp_baseline_read(entries, &count, NULL, 0) <= 0) return 0; /* wrong directory or unreadable */
@@ -1342,6 +1358,23 @@ static int disp_receive_pack(disp_upload_job *job) {
             if (identity_changed) disp_clear_error();
         }
     }
+    /* A full tracking set must not silently lose a new file: reserve a slot
+     * for every staged name before touching the disk. */
+    {
+        int needed = local_state.file_count;
+        for (int i = 0; i < staged_count; ++i) {
+            int known = 0;
+            for (int p = 0; p < local_state.file_count; ++p)
+                if (!strcmp(local_state.files[p], staged[i].name)) known = 1;
+            if (!known) needed++;
+        }
+        if (needed > DISP_MAX_STAGE) {
+            disp_set_error("display_state_full");
+            free(manifest);
+            pthread_mutex_unlock(&disp_apply_mutex);
+            goto out;
+        }
+    }
     /* Every staged asset must have a verified original before any write. */
     for (int i = 0; i < staged_count; ++i) {
         const disp_asset *asset = disp_find_asset_in(manifest, staged[i].name);
@@ -1387,7 +1420,13 @@ static int disp_receive_pack(disp_upload_job *job) {
         for (int p = 0; p < local_state.file_count; ++p)
             if (!strcmp(local_state.files[p], staged[i].name)) slot = p;
         if (slot < 0) {
-            if (local_state.file_count >= DISP_MAX_STAGE) continue;
+            if (local_state.file_count >= DISP_MAX_STAGE) {
+                /* The reservation above makes this unreachable; fail rather
+                 * than applying a file the state cannot remember. */
+                disp_set_error("display_state_full");
+                ok = 0;
+                break;
+            }
             slot = local_state.file_count++;
         }
         snprintf(local_state.files[slot], sizeof(local_state.files[slot]), "%.64s", staged[i].name);

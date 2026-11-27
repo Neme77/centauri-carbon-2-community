@@ -51,6 +51,7 @@ import {
   duplicateProfile,
   effectiveTokens,
   exportAppearance,
+  fitName,
   hexValid,
   importAppearance,
   isDark,
@@ -725,7 +726,7 @@ const LayoutTab = () => {
                   value={layout.name}
                   maxLength={64}
                   onInput={e => {
-                    const value = e.currentTarget.value
+                    const value = fitName(e.currentTarget.value)
                     updateLayout(item => {
                       item.name = value
                     })

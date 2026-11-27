@@ -386,7 +386,7 @@ int main(void) {
     assert(disp_state_cache.file_count == 320);
     assert(disp_state_cache.phase == 1);
     assert(!strcmp(disp_state_cache.files[319], "cap319.png"));
-    /* Restore all 154 verified originals. */
+    /* Restore all 320 verified originals. */
     assert(disp_restore_baseline(1, &disp_state_cache, NULL));
     for (int i = 0; i < 320; ++i) {
         char name[32], file[1024], body[96];
@@ -416,6 +416,33 @@ int main(void) {
     }
     assert(access(cap_journal, F_OK) != 0);
     rmdir(cap_state_file);
+
+    /* 7c. A full tracking set refuses a new name before touching the disk
+     * instead of applying a file it cannot remember (the state can hold 320
+     * names, and a firmware update may rename an asset). */
+    memset(&disp_state_cache, 0, sizeof(disp_state_cache));
+    disp_state_cache.phase = 1;
+    for (int i = 0; i < 320; ++i) {
+        char old[32];
+        snprintf(old, sizeof(old), "old%03d.png", i);
+        snprintf(disp_state_cache.files[i], sizeof(disp_state_cache.files[i]), "%s", old);
+        snprintf(disp_state_cache.hashes[i], sizeof(disp_state_cache.hashes[i]), "%s", gui_hash);
+        disp_state_cache.file_count++;
+    }
+    assert(disp_state_write());
+    {
+        tar_file extra[1] = {{"cap000.png", red, red_size}};
+        size_t extra_size;
+        unsigned char *extra_tar = make_tar(extra, 1, &extra_size);
+        assert(!disp_receive_pack(&(disp_upload_job){ -1, extra_tar, extra_size, extra_size, 0, {0, 0}, &fake_mqtt }));
+        assert(strstr(disp_error, "display_state_full"));
+        snprintf(cap_target, sizeof(cap_target), "%s/cap000.png", cap_theme);
+        char body[96];
+        int length = snprintf(body, sizeof(body), "original-000-%s", "padding-padding-padding-padding-padding");
+        assert(file_equals(cap_target, (const unsigned char *)body, (size_t)length));
+    }
+    memset(&disp_state_cache, 0, sizeof(disp_state_cache));
+    assert(disp_state_write());
 
     /* 8. The status endpoint stays responsive while an upload is streaming. */
     snprintf(disp_theme_dir, sizeof(disp_theme_dir), "%s", theme_dir);
