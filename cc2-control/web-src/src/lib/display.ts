@@ -333,7 +333,7 @@ export const applyPack = (pack: Blob, onProgress?: (percent: number) => void): P
     xhr.open('POST', '/api/display/apply')
     xhr.setRequestHeader('Content-Type', 'application/x-tar')
     xhr.setRequestHeader('X-CC2-Request', '1')
-    xhr.timeout = 300000
+    xhr.timeout = 360000
     xhr.upload.onprogress = event => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100))
     }

@@ -940,6 +940,14 @@ static int ap_copy_verified(const char *source, const char *destination, mode_t 
 
 /* ---- HTTP ------------------------------------------------------------- */
 
+/* A successful save means the file on disk is valid and current: drop the
+ * diagnostics of an earlier damaged read for every mutation handler. */
+static void ap_saved(void) {
+    ap_current.recovered = 0;
+    ap_current.unsupported = 0;
+    ap_current.error[0] = '\0';
+}
+
 static void ap_json_error(int fd, int code, const char *status, const char *message) {
     char body[192];
     int length = snprintf(body, sizeof(body), "{\"saved\":false,\"error\":\"%s\"}\n", message);
@@ -983,8 +991,7 @@ static void ap_put_response(int fd, const char *body, size_t length) {
         return;
     }
     ap_current = next;
-    ap_current.recovered = 0;
-    ap_current.error[0] = '\0';
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *ok = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", ok, strlen(ok));
@@ -1027,6 +1034,7 @@ static void ap_theme_put_response(int fd, const char *body, size_t length) {
         return;
     }
     ap_current = next;
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *reply = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
@@ -1074,6 +1082,7 @@ static void ap_theme_delete_response(int fd, const char *body, size_t length) {
         return;
     }
     ap_current = next;
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *reply = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
@@ -1126,6 +1135,7 @@ static void ap_profile_put_response(int fd, const char *body, size_t length) {  
         return;
     }
     ap_current = next;
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *reply = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
@@ -1171,6 +1181,7 @@ static void ap_profile_delete_response(int fd, const char *body, size_t length) 
         return;
     }
     ap_current = next;
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *reply = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
@@ -1219,6 +1230,7 @@ static void ap_profile_apply_response(int fd, const char *body, size_t length) {
         return;
     }
     ap_current = next;
+    ap_saved();
     pthread_mutex_unlock(&ap_mutex);
     const char *reply = "{\"saved\":true}\n";
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
@@ -1246,7 +1258,7 @@ static void ap_reset_response(int fd, const char *body, size_t length) {
     }
     ap_normalize(&next);
     int ok = ap_store(&next);
-    if (ok) ap_current = next;
+    if (ok) { ap_current = next; ap_saved(); }
     pthread_mutex_unlock(&ap_mutex);
     if (!ok) {
         ap_json_error(fd, 500, "Internal Server Error", "Cannot save appearance");

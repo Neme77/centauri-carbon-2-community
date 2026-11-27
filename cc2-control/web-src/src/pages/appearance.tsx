@@ -21,7 +21,7 @@ import {
   UserRound,
   Wand2,
 } from 'lucide-preact'
-import { Card, CardHead } from '@/components/ui/card'
+import { Card, CardHead, Page } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input, Select, Switch } from '@/components/ui/field'
@@ -146,7 +146,7 @@ const ColorField = ({
         class="size-9 shrink-0 cursor-pointer rounded-md border border-edge bg-field p-1 disabled:opacity-50"
       />
       <input
-        aria-label={t('appearance.color_hex')}
+        aria-label={`${t(label)} — ${t('appearance.color_hex')}`}
         value={text}
         disabled={disabled}
         spellcheck={false}
@@ -419,6 +419,13 @@ const ThemeCard = ({
 const Themes = () => {
   const { doc } = appearance.use()
   const [editor, setEditor] = useState<CustomTheme | null | undefined>(undefined)
+  const [systemLight, setSystemLight] = useState(() => matchMedia('(prefers-color-scheme: light)').matches)
+  useEffect(() => {
+    const query = matchMedia('(prefers-color-scheme: light)')
+    const update = () => setSystemLight(query.matches)
+    query.addEventListener?.('change', update)
+    return () => query.removeEventListener?.('change', update)
+  }, [])
   const custom = doc.themes
   return (
     <div class="grid gap-3.5">
@@ -453,7 +460,7 @@ const Themes = () => {
           <ThemeCard
             id="auto"
             name={t('appearance.system_theme')}
-            tokens={matchMedia('(prefers-color-scheme: light)').matches ? BUILTIN_TOKENS.light : BUILTIN_TOKENS.dark}
+            tokens={systemLight ? BUILTIN_TOKENS.light : BUILTIN_TOKENS.dark}
           />
           {BUILTIN_THEME_IDS.map(id => (
             <ThemeCard key={id} id={id} name={themeLabel(id)} tokens={BUILTIN_TOKENS[id]} />
@@ -1640,35 +1647,36 @@ export const Appearance = () => {
   }, [])
   return (
     <div class="cc2-appearance mx-auto max-w-5xl">
-      <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 class="text-2xl font-semibold tracking-tight">{t('appearance.title')}</h2>
-          <p class="text-muted">{t('appearance.subtitle')}</p>
-        </div>
-        <div class="flex items-center gap-2 text-xs text-muted">
-          <Dot c={error ? 'red' : 'green'} />
-          {error ? t('appearance.save_failed') : t('appearance.stored_on_printer')}
-        </div>
-      </div>
-      {doc.recovered && (
-        <p role="alert" class="mb-3 rounded-md border border-amber/50 bg-amber/10 p-2.5 text-sm text-amber">
-          {tpl('appearance.recovered_error', { error: doc.error || t('appearance.recovered_unknown') })}
-        </p>
-      )}
-      <Tabs
-        wrap
-        items={TABS.map(([Glyph, label, id]) => ({ id, label: t(label), icon: <Glyph size={16} /> }))}
-        value={tab}
-        onChange={id => openAppearance(id as AppearanceTab)}
-      />
-      {tab === 'overview' && <Overview />}
-      {tab === 'themes' && <Themes />}
-      {tab === 'layout' && <LayoutTab />}
-      {tab === 'widgets' && <WidgetEditor />}
-      {tab === 'touchscreen' && <Touchscreen />}
-      {tab === 'profiles' && <Profiles />}
-      {tab === 'transfer' && <Transfer />}
-      {tab === 'advanced' && <Advanced />}
+      <Page
+        title="appearance.title"
+        sub="appearance.subtitle"
+        tags={
+          <div class="flex items-center gap-2 text-xs text-muted">
+            <Dot c={error ? 'red' : 'green'} />
+            {error ? t('appearance.save_failed') : t('appearance.stored_on_printer')}
+          </div>
+        }
+      >
+        {doc.recovered && (
+          <p role="alert" class="mb-3 rounded-md border border-amber/50 bg-amber/10 p-2.5 text-sm text-amber">
+            {tpl('appearance.recovered_error', { error: doc.error || t('appearance.recovered_unknown') })}
+          </p>
+        )}
+        <Tabs
+          wrap
+          items={TABS.map(([Glyph, label, id]) => ({ id, label: t(label), icon: <Glyph size={16} /> }))}
+          value={tab}
+          onChange={id => openAppearance(id as AppearanceTab)}
+        />
+        {tab === 'overview' && <Overview />}
+        {tab === 'themes' && <Themes />}
+        {tab === 'layout' && <LayoutTab />}
+        {tab === 'widgets' && <WidgetEditor />}
+        {tab === 'touchscreen' && <Touchscreen />}
+        {tab === 'profiles' && <Profiles />}
+        {tab === 'transfer' && <Transfer />}
+        {tab === 'advanced' && <Advanced />}
+      </Page>
     </div>
   )
 }

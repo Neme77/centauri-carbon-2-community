@@ -1358,6 +1358,21 @@ export const importAppearance = async (raw: unknown) => {
     return false
   }
   const doc = normalizeDoc(raw)
+  /* Refuse before writing anything when the printer cannot hold the imported
+   * profiles or themes, instead of leaving a half-applied import behind. */
+  const current = docStore.get().doc
+  const extraProfiles = doc.profiles.filter(
+    profile => profile.id !== 'community' && !current.profiles.some(item => item.id === profile.id)
+  ).length
+  if (current.profiles.length + extraProfiles > 6) {
+    notify(t('appearance.profile_limit'), 'error')
+    return false
+  }
+  const extraThemes = doc.themes.filter(theme => !current.themes.some(item => item.id === theme.id)).length
+  if (current.themes.length + extraThemes > 8) {
+    notify(t('appearance.error_theme_limit'), 'error')
+    return false
+  }
   try {
     /* Themes first: the dashboard save resolves a custom theme id against the
      * stored library, so an import must not name a theme that does not exist

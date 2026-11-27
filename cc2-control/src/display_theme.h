@@ -925,20 +925,23 @@ static void disp_status_response(int fd) {
     int state_ok = disp_state_read();
     int reboot = 0;
     if (supported && disp_state_cache.phase == 1) {
-        char marker[64];
+        char marker[64], boot[40];
         disp_gui_marker(marker);
+        disp_boot_id(boot);
+        /* A different boot id proves the printer rebooted even in the unlikely
+         * case that the GUI process got the same pid and start time again. */
+        int boot_changed = disp_state_cache.boot_id[0] && boot[0] &&
+                           strcmp(boot, disp_state_cache.boot_id);
         if (!marker[0]) {
             /* The native program is not running (or this host has none): the
              * applied files are on disk but loading them is unconfirmed. */
             reboot = 1;
-        } else if (!strcmp(marker, disp_state_cache.gui_marker)) {
+        } else if (!strcmp(marker, disp_state_cache.gui_marker) && !boot_changed) {
             reboot = 1;
         } else {
-            /* The marker differs (or was not recorded while the GUI was down):
-             * the native program restarted and has loaded the new files. */
+            /* The marker or the boot id differs: the native program restarted
+             * and has loaded the new files. */
             snprintf(disp_state_cache.gui_marker, sizeof(disp_state_cache.gui_marker), "%s", marker);
-            char boot[40];
-            disp_boot_id(boot);
             snprintf(disp_state_cache.boot_id, sizeof(disp_state_cache.boot_id), "%s", boot);
             (void)disp_state_write();
         }
@@ -1379,6 +1382,13 @@ static int disp_receive_pack(disp_upload_job *job) {
     pthread_mutex_unlock(&disp_apply_mutex);
     result = ok && applied == staged_count;
 out:
+    if (!result) {
+        for (int i = 0; i < staged_count; ++i) {
+            char path[PATH_MAX_LOCAL];
+            if (disp_path_join(path, sizeof(path), stage, staged[i].name)) unlink(path);
+        }
+        rmdir(stage);
+    }
     free(staged);
     return result;
 }
