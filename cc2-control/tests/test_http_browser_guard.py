@@ -80,6 +80,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         assert call({"Content-Type": "application/json"}, "PUT", payload) == 403
         assert call({"X-CC2-Request": "1", "Content-Type": "application/json"}, "PUT", payload) == 200
         assert call({"Sec-Fetch-Site": "same-origin"}) == 200
+        assert call({}, "POST", b"", "/api/spoolman/sync") == 403
+        assert call({"X-CC2-Request": "1"}, "POST", b"", "/api/spoolman/sync") == 409
         assert call({}, "POST", b"REBOOT_AFTER_EMERGENCY", "/api/recovery/reboot") == 403
         assert call({"X-CC2-Request": "1"}, "POST", b"REBOOT_AFTER_EMERGENCY", "/api/recovery/reboot") == 409
         assert call({"Origin": "http://attacker.example"}, endpoint="/api/gcode-files/download?storage=internal&file=part.gcode") == 403

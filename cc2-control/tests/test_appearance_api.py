@@ -181,6 +181,21 @@ with tempfile.TemporaryDirectory(prefix="cc2-appearance-") as temporary:
         assert status_of(endpoint + "/themes/delete", {"id": "dark"}, "POST") == 400
         assert status_of(endpoint + "/themes/delete", {"id": "custom-merge-a"}, "POST") == 200
 
+        # A profile that names a theme the printer does not hold is stored with
+        # the default palette, never as a phantom reference.
+        ghost = {
+            "id": "profile-ghost", "name": "Ghost",
+            "dashboard": {**doc["dashboard"], "theme": "custom-ghost", "layout": "classic"},
+            "touchscreen": {"enabled": False, "linkAccent": True, "experimental": False,
+                            "accent": "#7eead8", "background": "#0a0c11", "boot": "community"},
+        }
+        code, _ = post(endpoint + "/profiles", {"profile": ghost})
+        assert code == 200
+        code, stored_doc = get(endpoint)
+        stored_ghost = next(item for item in stored_doc["profiles"] if item["id"] == "profile-ghost")
+        assert stored_ghost["dashboard"]["theme"] == "dark", stored_ghost["dashboard"]["theme"]
+        assert status_of(endpoint + "/profiles/delete", {"id": "profile-ghost"}, "POST") == 200
+
         # Profiles: create, list, apply, refuse deleting the built-in one, delete.
         profile = {
             "id": "profile-night", "name": "Night",

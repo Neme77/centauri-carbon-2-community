@@ -1413,7 +1413,9 @@ native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
 The same response includes `printer_alert`, the latest WARNING or CRITICAL
 report in the same format. Informational and RESUME events still update
 `printer_report` and leave `printer_alert` intact. The UI renders alert text and
-remembers explicit dismissal across reloads. Consecutive identical native reports retain their event ID;
+remembers explicit dismissal across reloads. When `message` is empty, the UI shows the
+translated text of ELEGOO's published error code table for known codes, with a link to the
+matching wiki.elegoo.com page; native text always takes precedence. Consecutive identical native reports retain their event ID;
 a warning following a RESUME is a new event, even with the same error code.
 The vendor stream does not provide an authoritative occurrence ID, so repeated
 identical warnings without an intervening transition cannot be distinguished.
@@ -1736,6 +1738,12 @@ this notice does not acknowledge or operate the physical display.
 Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.
 
 Screw pitch and alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of the same name on Bed Levelling → Bed alignment (tilt span, the shape-warning and nearly-flat limits, screw positions, row order of the mesh and the screw pitch, 0.3 to 1.5 mm per turn, saved in the browser); without it the page uses the CC2 defaults, among them the CC2's own M4 screw (0.7 mm per turn, clockwise seen from below raises the corner). It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.
+
+### Manual Spoolman synchronization
+
+`POST /api/spoolman/sync` starts the regular sync immediately, bypassing only its two-minute timer. Uses saved settings and existing usage/import safeguards. Returns `202 {"ok":true}` when started or when an existing worker/results are already pending; repeated requests do not queue extra cycles. Disabled integration returns `409` (`spoolman_off`), missing/invalid URL `400` (`spoolman_no_url` / `spoolman_bad_url`), unavailable library `503`, and allocation/thread start failure `500` (`spoolman_start_failed`). Normal browser mutation guards apply.
+
+`GET /api/spoolman` additionally returns `busy`: true while a sync/send worker or its main-thread results are pending, false after those results have been applied. Reading status never starts a sync. Existing `result` and `last_sync` keep their meaning; clients should not report completion while `busy` is true.
 
 ## Appearance and native-display customisation
 

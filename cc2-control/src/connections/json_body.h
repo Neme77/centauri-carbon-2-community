@@ -254,9 +254,15 @@ static inline int ng_json_parse(ng_json *j, const char *text, size_t size) {
 static inline int ng_member(const ng_json *j, int obj, const char *key) {
   if (obj < 0 || j->v[obj].type != '{')
     return -1;
-  for (int i = obj + 1; i < j->v[obj].next; i = j->v[i + 1].next)
+  for (int i = obj + 1; i < j->v[obj].next;) {
     if (!strcmp(j->v[i].text, key))
       return i + 1;
+    /* The value token carries the next key; stop at the array's used count so
+     * a document that ends exactly at the token budget never indexes past it. */
+    if (i + 1 >= j->used)
+      break;
+    i = j->v[i + 1].next;
+  }
   return -1;
 }
 static inline const char *ng_string(const ng_json *j, int obj,

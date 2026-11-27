@@ -312,8 +312,6 @@ int main(void) {
     disp_manifest_cache.valid = 0;
     assert(disp_load_manifest(1));
     snprintf(path, sizeof(path), "%s/display-theme/journal.json", root);
-    write_file(path, (const unsigned char *)"{\"version\":1,\"phase\":\"applying\",\"files\":[{\"name\":\"boot.png\",\"sha256\":\"" , 76);
-    /* Build a syntactically valid journal with the helper instead of partial text. */
     FILE *f = fopen(path, "wb");
     assert(f);
     fprintf(f, "{\"version\":1,\"phase\":\"applying\",\"files\":[{\"name\":\"boot.png\",\"sha256\":\"%s\"}]}\n", gui_hash);
@@ -326,7 +324,7 @@ int main(void) {
     snprintf(path, sizeof(path), "%s/display-theme/journal.json", root);
     assert(access(path, F_OK) != 0);
 
-    /* 7. A realistic 154-file baseline and state round-trip. */
+    /* 7. A realistic 320-file baseline and state round-trip. */
     char cap[640], cap_theme[768], cap_state[768], cap_prefs[768];
     snprintf(cap, sizeof(cap), "%s/capacity", root);
     assert(!mkdir(cap, 0700));
@@ -346,7 +344,7 @@ int main(void) {
     disp_manifest_cache.schema = 1;
     snprintf(disp_manifest_cache.firmware_base, sizeof(disp_manifest_cache.firmware_base), "capacity");
     snprintf(disp_manifest_cache.gui_sha256, sizeof(disp_manifest_cache.gui_sha256), "%s", gui_hash);
-    for (int i = 0; i < 154; ++i) {
+    for (int i = 0; i < 320; ++i) {
         char name[32], body[96], file[1024];
         snprintf(name, sizeof(name), "cap%03d.png", i);
         int length = snprintf(body, sizeof(body), "original-%03d-%s", i, "padding-padding-padding-padding-padding");
@@ -360,8 +358,8 @@ int main(void) {
         snprintf(asset->sha256, sizeof(asset->sha256), "%s", gui_hash); /* placeholder, replaced below */
         disp_sha_file(file, asset->sha256);
     }
-    assert(disp_manifest_cache.count == 154);
-    for (int i = 0; i < 154; ++i) assert(disp_backup_original(&disp_manifest_cache.assets[i]));
+    assert(disp_manifest_cache.count == 320);
+    for (int i = 0; i < 320; ++i) assert(disp_backup_original(&disp_manifest_cache.assets[i]));
     assert(disp_baseline_write(&disp_manifest_cache));
     snprintf(path, sizeof(path), "%s/baseline.json", cap_state);
     struct stat baseline_stat;
@@ -369,7 +367,7 @@ int main(void) {
     /* Customize every file and record that as the applied state. */
     memset(&disp_state_cache, 0, sizeof(disp_state_cache));
     disp_state_cache.phase = 1;
-    for (int i = 0; i < 154; ++i) {
+    for (int i = 0; i < 320; ++i) {
         char name[32], file[1024], body[96], hash[65];
         snprintf(name, sizeof(name), "cap%03d.png", i);
         snprintf(file, sizeof(file), "%s/%s", cap_theme, name);
@@ -385,12 +383,12 @@ int main(void) {
     assert(stat(path, &baseline_stat) == 0 && baseline_stat.st_size < DISP_META_MAX);
     disp_state_loaded = 0;
     assert(disp_state_read());
-    assert(disp_state_cache.file_count == 154);
+    assert(disp_state_cache.file_count == 320);
     assert(disp_state_cache.phase == 1);
-    assert(!strcmp(disp_state_cache.files[153], "cap153.png"));
+    assert(!strcmp(disp_state_cache.files[319], "cap319.png"));
     /* Restore all 154 verified originals. */
     assert(disp_restore_baseline(1, &disp_state_cache, NULL));
-    for (int i = 0; i < 154; ++i) {
+    for (int i = 0; i < 320; ++i) {
         char name[32], file[1024], body[96];
         snprintf(name, sizeof(name), "cap%03d.png", i);
         snprintf(file, sizeof(file), "%s/%s", cap_theme, name);

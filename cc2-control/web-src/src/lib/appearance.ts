@@ -174,7 +174,7 @@ export const DEFAULT_WIDGETS = (): WidgetPref[] =>
 
 export const defaultLayout = (): Layout => ({
   id: 'custom-grid',
-  name: 'Custom grid',
+  name: t('appearance.custom_layout_default_name'),
   columns: 4,
   widgets: DEFAULT_WIDGETS(),
 })
@@ -383,11 +383,11 @@ export const BUILTIN_THEME_IDS = Object.keys(BUILTIN_TOKENS)
 
 export const themeLabel = (id: string): string => {
   const known: Record<string, string> = {
-    dark: 'Dark',
-    light: 'Light',
+    dark: t('common.dark'),
+    light: t('common.light'),
     'solarized-light': 'Solarized Light',
     klipperscreen: 'KlipperScreen',
-    auto: 'System',
+    auto: t('appearance.system_theme'),
     'custom-grid': '',
   }
   return known[id] ?? id.replace(/(^|-)([a-z])/g, (_, dash, letter) => (dash ? ' ' : '') + letter.toUpperCase())
@@ -709,10 +709,23 @@ export const themeIdOk = (id: unknown): id is string =>
   id.length <= THEME_ID_MAX &&
   /^custom-[a-z](?:[a-z-]*[a-z])?$/.test(id) &&
   !id.includes('--')
+/* The printer stores names as at most 64 UTF-8 bytes (ap_name_valid), while
+ * the UI inputs count characters. A 33-character Cyrillic name is 66 bytes and
+ * would make the whole document save fail, so every write is fitted by bytes. */
+export const utf8Bytes = (value: string) => new TextEncoder().encode(value).length
+export const fitName = (value: string, max = 64) => {
+  let out = ''
+  for (const character of value) {
+    if (utf8Bytes(out + character) > max) break
+    out += character
+  }
+  return out
+}
+const NAME_MAX_BYTES = 64
 const nameOk = (name: unknown) =>
   typeof name === 'string' &&
   name.trim().length > 0 &&
-  name.trim().length <= 64 &&
+  utf8Bytes(name.trim()) <= NAME_MAX_BYTES &&
   ![...name].some(ch => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127)
 const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback)
 const int = (v: unknown, min: number, max: number, fallback: number) =>
@@ -1055,7 +1068,7 @@ export const uniqueThemeId = (doc: AppearanceDoc, name: string) => {
   return `${base.slice(0, limit - 2).replace(/-+$/g, '')}-z`
 }
 
-export const createTheme = (name: string, tokens: ThemeTokens, applyNow = true): CustomTheme | null => {
+export const createTheme = async (name: string, tokens: ThemeTokens, applyNow = true): Promise<CustomTheme | null> => {
   const current = docStore.get().doc
   const validTokens = normalizeTokens(tokens)
   if (!validTokens) {
@@ -1066,10 +1079,10 @@ export const createTheme = (name: string, tokens: ThemeTokens, applyNow = true):
     notify(t('appearance.error_theme_limit'), 'error')
     return null
   }
-  const trimmed = typeof name === 'string' ? name.trim().slice(0, 64) : ''
+  const trimmed = typeof name === 'string' ? fitName(name.trim()) : ''
   const theme: CustomTheme = {
-    id: uniqueThemeId(current, trimmed || 'Custom'),
-    name: trimmed || 'Custom',
+    id: uniqueThemeId(current, trimmed || t('appearance.custom')),
+    name: trimmed || t('appearance.custom'),
     tokens: validTokens,
   }
   updateDoc(doc => {
@@ -1080,22 +1093,20 @@ export const createTheme = (name: string, tokens: ThemeTokens, applyNow = true):
     }
   }, false)
   /* The theme must exist on the printer before a dashboard that names it is
-   * saved, otherwise the server's normaliser would fall back to the default. */
-  void (async () => {
-    if ((await saveThemeRequest(theme)) && applyNow) {
-      await saveAppearance().catch(error => notify(errText(error), 'error'))
-    }
-  })()
+   * saved, otherwise the server's normaliser would fall back to the default.
+   * The caller only reports success once the printer stored it. */
+  if (!(await saveThemeRequest(theme))) return null
+  if (applyNow) await saveAppearance().catch(error => notify(errText(error), 'error'))
   return theme
 }
 
-export const updateTheme = (theme: CustomTheme): boolean => {
+export const updateTheme = async (theme: CustomTheme): Promise<boolean> => {
   const validTokens = normalizeTokens(theme.tokens)
   if (!validTokens || !themeIdOk(theme.id)) {
     notify(t('appearance.error_theme_invalid'), 'error')
     return false
   }
-  const next = { ...theme, tokens: validTokens }
+  const next = { ...theme, name: fitName(theme.name.trim()) || t('appearance.custom'), tokens: validTokens }
   const exists = docStore.get().doc.themes.some(item => item.id === next.id)
   if (!exists) {
     notify(t('appearance.error_theme_invalid'), 'error')
@@ -1105,8 +1116,7 @@ export const updateTheme = (theme: CustomTheme): boolean => {
     const index = doc.themes.findIndex(item => item.id === next.id)
     if (index >= 0) doc.themes[index] = { ...next }
   }, false)
-  void saveThemeRequest(next)
-  return true
+  return saveThemeRequest(next)
 }
 
 export const deleteTheme = async (id: string) => {
@@ -1187,7 +1197,7 @@ export const newLayout = (name: string) => {
     const id = `grid-${Date.now().toString(36)}`
     doc.dashboard.layouts.push({
       id,
-      name: name.trim().slice(0, 64) || 'Layout',
+      name: fitName(name.trim()) || t('appearance.custom_layout_default_name'),
       columns: 4,
       widgets: DEFAULT_WIDGETS(),
     })
@@ -1202,7 +1212,7 @@ export const duplicateLayout = (id: string) => {
     if (!source) return
     const next = clone(source)
     next.id = `grid-${Date.now().toString(36)}`
-    next.name = `${source.name} copy`
+    next.name = fitName(`${source.name} ${t('appearance.copy_suffix')}`)
     doc.dashboard.layouts.push(next)
     doc.dashboard.layout = next.id
   })
@@ -1244,7 +1254,7 @@ export const saveProfile = async (name: string, id?: string) => {
   const existing = id ? doc.profiles.find(profile => profile.id === id) : undefined
   const profile: AppearanceProfile = {
     id: profileId,
-    name: name.trim().slice(0, 64) || profileId,
+    name: fitName(name.trim()) || profileId,
     // Renaming keeps the profile's own snapshot; a new profile captures the
     // active appearance.
     dashboard: clone(existing?.dashboard ?? doc.dashboard),
@@ -1269,7 +1279,7 @@ export const duplicateProfile = async (id: string) => {
   const doc = docStore.get().doc
   const source = doc.profiles.find(profile => profile.id === id)
   if (!source) return false
-  const name = `${source.name} ${t('appearance.copy_suffix')}`.trim()
+  const name = fitName(`${source.name} ${t('appearance.copy_suffix')}`.trim())
   let nextId = `profile-${slug(name)}`
   let suffix = 0
   while (doc.profiles.some(profile => profile.id === nextId)) {
@@ -1375,6 +1385,14 @@ export const importAppearance = async (raw: unknown) => {
     return false
   }
   const doc = normalizeDoc(raw)
+  /* normalizeDoc drops an invalid theme, profile or layout. An import must not
+   * claim success while silently omitting part of the file. */
+  const rawDocument = raw as Record<string, unknown>
+  const declared = (key: string) => (Array.isArray(rawDocument[key]) ? (rawDocument[key] as unknown[]).length : 0)
+  if (declared('themes') > doc.themes.length || declared('profiles') > doc.profiles.length) {
+    notify(t('appearance.import_bad'), 'error')
+    return false
+  }
   /* Refuse before writing anything when the printer cannot hold the imported
    * profiles or themes, instead of leaving a half-applied import behind. */
   const current = docStore.get().doc

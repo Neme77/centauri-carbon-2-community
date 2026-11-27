@@ -1020,18 +1020,18 @@ static void ap_theme_put_response(int fd, const char *body, size_t length) {
         ap_json_error(fd, 400, "Bad Request", "Unsupported theme");
         return;
     }
+    ap_state next = ap_current;
     int slot = -1;
-    for (int i = 0; i < ap_current.theme_count; ++i)
-        if (!strcmp(ap_current.themes[i].id, theme.id)) slot = i;
+    for (int i = 0; i < next.theme_count; ++i)
+        if (!strcmp(next.themes[i].id, theme.id)) slot = i;
     if (slot < 0) {
-        if (ap_current.theme_count >= AP_MAX_THEMES) {
+        if (next.theme_count >= AP_MAX_THEMES) {
             pthread_mutex_unlock(&ap_mutex);
             ap_json_error(fd, 409, "Conflict", "Too many custom themes");
             return;
         }
-        slot = ap_current.theme_count++;
+        slot = next.theme_count++;
     }
-    ap_state next = ap_current;
     next.themes[slot] = theme;
     if (!ap_store(&next)) {
         pthread_mutex_unlock(&ap_mutex);
@@ -1056,9 +1056,16 @@ static void ap_theme_delete_response(int fd, const char *body, size_t length) {
     pthread_mutex_lock(&ap_mutex);
     ngl_json *doc = malloc(sizeof(*doc));
     int ok = doc && ngl_json_parse(doc, body, length) && doc->v[0].type == '{';
-    const char *id = ok ? ngl_string(doc, 0, "id") : NULL;
-    int valid = id && ap_theme_id_valid(id) && !strncmp(id, "custom-", 7);
+    /* Copy the id out of the document before freeing it: the string lives in
+     * doc->strings, and the delete below compares it after free(doc). */
+    char id[AP_ID_MAX + 1];
+    memset(id, 0, sizeof(id));
+    if (ok) {
+        const char *value = ngl_string(doc, 0, "id");
+        if (value && strlen(value) <= AP_ID_MAX) snprintf(id, sizeof(id), "%s", value);
+    }
     free(doc);
+    int valid = id[0] && ap_theme_id_valid(id) && !strncmp(id, "custom-", 7);
     if (!valid) {
         pthread_mutex_unlock(&ap_mutex);
         ap_json_error(fd, 400, "Bad Request", "Only a custom theme can be removed");
@@ -1135,6 +1142,17 @@ static void ap_profile_put_response(int fd, const char *body, size_t length) {
         }
         next.themes[theme_slot] = theme;
     }
+    /* A profile that names a custom theme the library does not hold would show
+     * a phantom palette in the list and fall back to dark when applied; store
+     * the default instead. */
+    if (!strncmp(next.profiles[slot].dashboard.theme, "custom-", 7)) {
+        int known = 0;
+        for (int i = 0; i < next.theme_count; ++i)
+            if (!strcmp(next.themes[i].id, next.profiles[slot].dashboard.theme)) known = 1;
+        if (!known)
+            snprintf(next.profiles[slot].dashboard.theme,
+                     sizeof(next.profiles[slot].dashboard.theme), "dark");
+    }
     if (!ap_store(&next)) {
         pthread_mutex_unlock(&ap_mutex);
         ap_json_error(fd, 500, "Internal Server Error", "Cannot save profile");
@@ -1156,9 +1174,14 @@ static void ap_profile_delete_response(int fd, const char *body, size_t length) 
     pthread_mutex_lock(&ap_mutex);
     ngl_json *doc = malloc(sizeof(*doc));
     int ok = doc && ngl_json_parse(doc, body, length) && doc->v[0].type == '{';
-    const char *id = ok ? ngl_string(doc, 0, "id") : NULL;
-    int valid = id && ap_id_valid(id) && strcmp(id, "community");
+    char id[AP_ID_MAX + 1];
+    memset(id, 0, sizeof(id));
+    if (ok) {
+        const char *value = ngl_string(doc, 0, "id");
+        if (value && strlen(value) <= AP_ID_MAX) snprintf(id, sizeof(id), "%s", value);
+    }
     free(doc);
+    int valid = id[0] && ap_id_valid(id) && strcmp(id, "community");
     if (!valid) {
         pthread_mutex_unlock(&ap_mutex);
         ap_json_error(fd, 400, "Bad Request", "The built-in profile cannot be removed");

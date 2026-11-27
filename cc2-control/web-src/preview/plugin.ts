@@ -1311,6 +1311,7 @@ export function previewPlugin(): Plugin {
           '/api/preferences',
           '/api/appearance',
           '/api/appearance/themes',
+          '/api/appearance/themes/delete',
           '/api/appearance/profiles',
           '/api/appearance/profiles/apply',
           '/api/appearance/profiles/delete',

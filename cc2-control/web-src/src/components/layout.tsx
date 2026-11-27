@@ -438,6 +438,45 @@ export const Toast = () => {
   ) : null
 }
 
+// Official text from wiki.elegoo.com/en/centauri-carbon-2-combo/errorcode-<page>, shown when the native message is empty.
+const ERROR_TEXT: Record<number, [Key, string]> = {
+  101: ['printer.error_101', '101'],
+  102: ['printer.error_102', '102'],
+  103: ['printer.error_103', '103'],
+  104: ['printer.error_104', '104'],
+  109: ['printer.error_109', '109'],
+  205: ['printer.error_205', '205-206'],
+  206: ['printer.error_206', '205-206'],
+  304: ['printer.error_304', '304'],
+  605: ['printer.error_605', '605'],
+  701: ['printer.error_701', '701'],
+  702: ['printer.error_702', '702'],
+  703: ['printer.error_703', '703'],
+  704: ['printer.error_704', '704'],
+  705: ['printer.error_705', '705'],
+  706: ['printer.error_706', '706'],
+  707: ['printer.error_707', '707'],
+  801: ['printer.error_801', '801'],
+  802: ['printer.error_802', '802'],
+  1101: ['printer.error_1101', '1101'],
+  1102: ['printer.error_1102', '1102'],
+  1211: ['printer.error_1211', '1211'],
+  1220: ['printer.error_1220', '1220'],
+  1231: ['printer.error_1231', '1231'],
+  1241: ['printer.error_1241', '1241'],
+  1242: ['printer.error_1242', '1242'],
+  1243: ['printer.error_1243', '1243'],
+  1251: ['printer.error_1251', '1251'],
+  1252: ['printer.error_1252', '1252'],
+  1263: ['printer.error_1263', '1263'],
+  1264: ['printer.error_1264', '1263'],
+  1265: ['printer.error_1265', '1265'],
+  1266: ['printer.error_1266', '1266-1267'],
+  1267: ['printer.error_1266', '1266-1267'],
+  2002: ['printer.error_2002', '2003'],
+  2003: ['printer.error_2003', '2003'],
+}
+
 // No extra poll: retain the latest native event in the existing printer response.
 export const PrinterReport = () => {
   const { data, ok } = printer.use()
@@ -460,6 +499,7 @@ export const PrinterReport = () => {
     }
   }
   if (!report || (report.level !== 1 && report.level !== 2) || dismissed === eventId) return null
+  const known = ERROR_TEXT[report.code]
   const title =
     report.level === 3
       ? 'printer.report_resume'
@@ -478,7 +518,21 @@ export const PrinterReport = () => {
           <X size={18} />
         </button>
       </div>
-      {report.message && <p class="mt-2 whitespace-pre-wrap break-words">{report.message}</p>}
+      {(report.message || known) && (
+        <p class="mt-2 whitespace-pre-wrap break-words">{report.message || (known && t(known[0]))}</p>
+      )}
+      {known && (
+        <p class="mt-2 text-sm">
+          <a
+            href={`https://wiki.elegoo.com/en/centauri-carbon-2-combo/errorcode-${known[1]}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-cyan underline"
+          >
+            {t('printer.report_wiki')}
+          </a>
+        </p>
+      )}
       <p class="mt-2 text-xs text-muted">
         {tpl('printer.report_last', { seconds: report.age })} {t('printer.report_history')}
       </p>

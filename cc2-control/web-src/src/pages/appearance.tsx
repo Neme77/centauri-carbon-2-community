@@ -259,26 +259,28 @@ const ThemeEditor = ({ theme, onClose }: { theme: CustomTheme | null; onClose: (
     if (!editing) setName(found.name)
   }
   const derive = () => setTokens(deriveTokens(tokens.bg, tokens.cyan, isDark(tokens.bg) ? 'dark' : 'light'))
-  const save = () => {
+  const save = async () => {
     if (!name.trim()) {
       notify(t('appearance.name_required'), 'error')
       return
     }
     const saved =
-      editing && theme ? updateTheme({ id: theme.id, name: name.trim(), tokens }) : createTheme(name.trim(), tokens)
+      editing && theme
+        ? await updateTheme({ id: theme.id, name: name.trim(), tokens })
+        : await createTheme(name.trim(), tokens)
     if (!saved) return
     notify(t('appearance.theme_saved'))
     onClose()
   }
-  const duplicate = () => {
-    if (!createTheme(`${name.trim()} ${t('appearance.copy_suffix')}`.trim(), tokens)) return
+  const duplicate = async () => {
+    if (!(await createTheme(`${name.trim()} ${t('appearance.copy_suffix')}`.trim(), tokens))) return
     notify(t('appearance.theme_saved'))
     onClose()
   }
   const remove = async () => {
     if (!editing || !theme) return
     if (!(await ask(t('appearance.delete_theme_confirm'), true))) return
-    deleteTheme(theme.id)
+    await deleteTheme(theme.id)
     notify(t('appearance.theme_deleted'))
     onClose()
   }
@@ -346,14 +348,14 @@ const ThemeEditor = ({ theme, onClose }: { theme: CustomTheme | null; onClose: (
               <Trash2 size={16} />
               {t('common.delete')}
             </Button>
-            <Button onClick={duplicate}>
+            <Button onClick={() => void duplicate()}>
               <Copy size={16} />
               {t('appearance.duplicate')}
             </Button>
           </>
         )}
         <Button onClick={onClose}>{t('common.cancel')}</Button>
-        <Button variant="primary" onClick={save}>
+        <Button variant="primary" onClick={() => void save()}>
           <Check size={16} />
           {t('appearance.save_theme')}
         </Button>
@@ -593,7 +595,14 @@ const WidgetEditor = () => {
                 class="rounded p-1.5 text-muted hover:bg-panel hover:text-fg disabled:opacity-40"
                 aria-label={tpl('appearance.move_widget_up', { name: t(WIDGET_TITLE[widget.id] as Key) })}
                 disabled={index === 0}
-                onClick={() => moveWidget(widget.id, -1)}
+                onClick={event => {
+                  const label = event.currentTarget.getAttribute('aria-label')
+                  moveWidget(widget.id, -1)
+                  requestAnimationFrame(() => {
+                    const buttons = document.querySelectorAll<HTMLButtonElement>(`[data-widget="${widget.id}"] button`)
+                    for (const button of buttons) if (button.getAttribute('aria-label') === label) button.focus()
+                  })
+                }}
               >
                 <ArrowUp size={16} />
               </button>
@@ -602,7 +611,14 @@ const WidgetEditor = () => {
                 class="rounded p-1.5 text-muted hover:bg-panel hover:text-fg disabled:opacity-40"
                 aria-label={tpl('appearance.move_widget_down', { name: t(WIDGET_TITLE[widget.id] as Key) })}
                 disabled={index === layout.widgets.length - 1}
-                onClick={() => moveWidget(widget.id, 1)}
+                onClick={event => {
+                  const label = event.currentTarget.getAttribute('aria-label')
+                  moveWidget(widget.id, 1)
+                  requestAnimationFrame(() => {
+                    const buttons = document.querySelectorAll<HTMLButtonElement>(`[data-widget="${widget.id}"] button`)
+                    for (const button of buttons) if (button.getAttribute('aria-label') === label) button.focus()
+                  })
+                }}
               >
                 <ArrowDown size={16} />
               </button>
@@ -814,16 +830,16 @@ const Overview = () => {
       <Card>
         <CardHead icon="palette" title="appearance.overview" />
         <p class="mb-3 max-w-3xl text-sm text-muted">{t('appearance.overview_intro')}</p>
-        <div class="grid gap-2.5 sm:grid-cols-2">
-          <div class="rounded-md border border-edge bg-field p-3">
+        <div class="grid min-w-0 gap-2.5 sm:grid-cols-2">
+          <div class="min-w-0 rounded-md border border-edge bg-field p-3">
             <small class="text-muted">{t('appearance.active_theme')}</small>
-            <div class="mt-1 flex items-center gap-2">
+            <div class="mt-1 flex min-w-0 items-center gap-2">
               <span
                 class="size-5 rounded-full border border-edge"
                 style={{ background: effectiveTokens(doc).cyan }}
                 aria-hidden="true"
               />
-              <b class="truncate">
+              <b class="min-w-0 truncate">
                 {doc.dashboard.theme === 'auto'
                   ? t('appearance.system_theme')
                   : doc.dashboard.theme.startsWith('custom-')
@@ -832,21 +848,21 @@ const Overview = () => {
               </b>
             </div>
           </div>
-          <div class="rounded-md border border-edge bg-field p-3">
+          <div class="min-w-0 rounded-md border border-edge bg-field p-3">
             <small class="text-muted">{t('appearance.active_layout')}</small>
             <div class="mt-1 truncate font-semibold">
               {layout?.id === 'classic' ? t('appearance.layout_classic') : layout?.name}
             </div>
           </div>
-          <div class="rounded-md border border-edge bg-field p-3">
+          <div class="min-w-0 rounded-md border border-edge bg-field p-3">
             <small class="text-muted">{t('appearance.active_profile')}</small>
             <div class="mt-1 truncate font-semibold">{profile?.name ?? doc.activeProfile}</div>
           </div>
-          <div class="rounded-md border border-edge bg-field p-3" role="status">
+          <div class="min-w-0 rounded-md border border-edge bg-field p-3" role="status">
             <small class="text-muted">{t('appearance.storage')}</small>
-            <div class="mt-1 flex items-center gap-2">
+            <div class="mt-1 flex min-w-0 items-center gap-2">
               <Dot c={error ? 'red' : saving ? 'amber' : loaded ? 'green' : 'amber'} />
-              <b class="truncate">
+              <b class="min-w-0 truncate">
                 {error
                   ? tpl('appearance.save_failed_error', { error })
                   : saving
@@ -1257,13 +1273,13 @@ const Profiles = () => {
             <div
               key={item.id}
               class={cn(
-                'flex flex-wrap items-center gap-2 rounded-md border p-2.5',
+                'flex min-w-0 flex-wrap items-center gap-2 rounded-md border p-2.5',
                 item.id === doc.activeProfile ? 'border-cyan bg-cyan/5' : 'border-edge bg-field'
               )}
             >
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <b class="truncate">{item.name}</b>
+                <div class="flex min-w-0 items-center gap-2">
+                  <b class="min-w-0 truncate">{item.name}</b>
                   {item.id === 'community' && <Tag>{t('appearance.built_in')}</Tag>}
                   {item.id === doc.activeProfile && (
                     <Tag tone="ok">
@@ -1397,7 +1413,7 @@ const Transfer = () => {
       if (parsed?.format !== 'cc2-theme' || typeof parsed.name !== 'string' || !parsed.tokens) throw Error()
       const valid = normalizeThemes([{ id: 'custom-imported', name: parsed.name, tokens: parsed.tokens }])[0]
       if (!valid) throw Error()
-      const theme = createTheme(valid.name, valid.tokens, false)
+      const theme = await createTheme(valid.name, valid.tokens, false)
       if (theme) notify(t('appearance.import_success'))
     } catch {
       notify(t('appearance.import_bad'), 'error')
@@ -1538,7 +1554,7 @@ const Advanced = () => {
                   current.dashboard.scale = Number(e.currentTarget.value)
                 }, false)
               }
-              onChange={() => void saveAppearance()}
+              onChange={() => void saveAppearance().catch(error => notify(errText(error), 'error'))}
               class="min-w-0 flex-1"
             />
             <b class="w-12 text-right tabular-nums">{Math.round(doc.dashboard.scale * 100)}%</b>
@@ -1558,7 +1574,7 @@ const Advanced = () => {
                   current.dashboard.radius = Number(e.currentTarget.value)
                 }, false)
               }
-              onChange={() => void saveAppearance()}
+              onChange={() => void saveAppearance().catch(error => notify(errText(error), 'error'))}
               class="min-w-0 flex-1"
             />
             <b class="w-12 text-right tabular-nums">{doc.dashboard.radius}px</b>

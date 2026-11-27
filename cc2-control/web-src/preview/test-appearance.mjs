@@ -96,15 +96,27 @@ try {
   // other theme another browser could have added.
   await page.goto(origin + '#appearance/themes')
   await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
-  const cards = page.locator('button[aria-pressed]')
-  await cards.filter({ hasText: 'A very long custom theme' }).first().click()
-  await page.locator('section').filter({ hasText: 'Themes' }).getByRole('button', { name: 'Edit', exact: true }).last().click()
+  const longCard = page
+    .locator('button[aria-pressed]')
+    .filter({ hasText: 'A very long custom theme name for the contract' })
+    .first()
+    .locator('xpath=..')
+  await longCard.locator('button[aria-pressed]').click()
+  await longCard.getByRole('button', { name: 'Edit', exact: true }).click()
   const deleteWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance/themes/delete') && r.method() === 'POST')
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
   await page.getByRole('dialog').last().getByRole('button', { name: 'Confirm', exact: true }).click()
   await deleteWrite
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(400)
   assert(writes.some(w => w.url.endsWith('/api/appearance/themes/delete')), JSON.stringify(writes))
+  await page.reload()
+  await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
+  await page.waitForTimeout(400)
+  assert.equal(
+    await page.getByText('A very long custom theme name for the contract', { exact: false }).count(),
+    0,
+    'a deleted theme must be gone after a reload'
+  )
 
   // System theme follows the operating-system preference and reacts to it.
   await page.emulateMedia({ colorScheme: 'light' })
@@ -131,16 +143,18 @@ try {
   const firstAfter = await page.locator('.cc2-widget-cell').first().getAttribute('data-widget')
   assert.notEqual(firstBefore, firstAfter)
 
-  // Profiles.
+  // Profiles, with a name at the 64-character limit (the longest the printer
+  // stores) so the phone-width check below covers the real worst case.
+  const longProfile = 'Evening ' + 'x'.repeat(56)
   await page.goto(origin + '#appearance/profiles')
-  await page.getByRole('textbox', { name: 'Profile name' }).fill('Evening')
+  await page.getByRole('textbox', { name: 'Profile name' }).fill(longProfile)
   const profileWrite = page.waitForResponse(r => r.url().endsWith('/api/appearance/profiles') && r.request().method() === 'POST')
   await page.getByRole('button', { name: 'Save current as profile', exact: true }).click()
   const profileResponse = await profileWrite
   assert.equal(profileResponse.status(), 200, await profileResponse.text())
-  await page.getByText('Evening', { exact: true }).waitFor()
-  await page.getByRole('button', { name: 'Apply', exact: true }).first().click()
-  await page.waitForFunction(() => document.body.textContent.includes('Evening'))
+  await page.getByText(longProfile, { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Apply', exact: true }).last().click()
+  await page.waitForFunction(name => document.body.textContent.includes(name), longProfile)
 
   // Every tab renders, including the one that used to throw (Advanced).
   const tabs = [
@@ -195,10 +209,20 @@ try {
   // The studio must stay usable at phone width: wrapped tabs, no horizontal overflow.
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto(origin + '#appearance/themes')
-    await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
-    await page.waitForTimeout(400)
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width}px overflow`)
+    for (const [slug, tab] of [
+      ['themes', 'Themes'],
+      ['profiles', 'Profiles'],
+      ['overview', 'Overview'],
+    ]) {
+      await page.goto(`${origin}#appearance/${slug}`)
+      await page.getByRole('tab', { name: tab, exact: true }).waitFor()
+      await page.waitForTimeout(400)
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1),
+        false,
+        `${width}px overflow on ${slug}`
+      )
+    }
   }
 
   assert.deepEqual(errors, [])

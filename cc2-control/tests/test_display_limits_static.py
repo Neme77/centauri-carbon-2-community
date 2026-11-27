@@ -29,6 +29,8 @@ server = {
 assert server["pack"] == 4 * MiB, server
 assert server["file"] == 512 * KiB, server
 assert server["assets"] == 320, server
+# The per-pack and per-state stage limit must reach every advertised asset.
+assert "#define DISP_MAX_STAGE DISP_MAX_ASSETS" in header
 
 client_pack = number(client, r"export const MAX_PACK_BYTES = (\d+) \* 1024 \* 1024") * MiB
 client_file = number(client, r"export const MAX_FILE_BYTES = (\d+) \* 1024") * KiB

@@ -35,7 +35,7 @@
 #define DISP_ROLE_MAX 16
 #define DISP_MAX_PACK (4 * 1024 * 1024)
 #define DISP_MAX_FILE (512 * 1024)
-#define DISP_MAX_STAGE 256
+#define DISP_MAX_STAGE DISP_MAX_ASSETS
 /* Upper bound for one metadata document (state, journal, baseline manifest).
  * 320 assets x ~110 bytes = ~35 KiB, so 64 KiB is the supported maximum and
  * every writer and reader uses it. Baseline image files are separate. */
@@ -1326,20 +1326,20 @@ static int disp_receive_pack(disp_upload_job *job) {
         disp_baseline_entry existing[DISP_MAX_STAGE];
         int existing_count = 0;
         disp_baseline_identity existing_identity;
-        int existing_read = disp_baseline_read(existing, &existing_count, &existing_identity, 1);
-        if (existing_read < 0) {
-            /* The saved originals belong to another firmware/GUI. Discard them
-             * only when every target is provably an original (the old one or
-             * the current firmware's own); otherwise the user must restore
-             * first, which removes the baseline. */
+        int existing_read = disp_baseline_read(existing, &existing_count, &existing_identity, 0);
+        int identity_changed = existing_read > 0 &&
+            ((manifest->firmware_base[0] && strcmp(manifest->firmware_base, existing_identity.firmware_base)) ||
+             (manifest->gui_sha256[0] && strcmp(manifest->gui_sha256, existing_identity.gui_sha256)));
+        /* A baseline from another identity, or one that exists but cannot be
+         * read, must be dealt with before a new one is written over it. */
+        if (identity_changed || existing_read <= 0) {
             if (!disp_baseline_is_stale_and_safe(manifest)) {
+                disp_set_error(identity_changed ? "display_firmware_changed" : "display_backup_missing");
                 free(manifest);
                 pthread_mutex_unlock(&disp_apply_mutex);
                 goto out;
             }
-            /* The refusal above set display_firmware_changed; the apply that
-             * follows is a success and must not report it. */
-            disp_clear_error();
+            if (identity_changed) disp_clear_error();
         }
     }
     /* Every staged asset must have a verified original before any write. */
@@ -1631,6 +1631,7 @@ static void disp_restore_response(int fd, const mqtt_client *mqtt) {
 static void disp_startup_recover(void) {
     if (!disp_ensure_state_dir()) return;
     char journal[PATH_MAX_LOCAL], stage[PATH_MAX_LOCAL];
+    stage[0] = '\0';
     if (!disp_journal_path(journal, sizeof(journal))) return;
     (void)disp_stage_dir(stage, sizeof(stage));
     if (!disp_regular(journal)) {
