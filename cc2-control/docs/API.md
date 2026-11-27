@@ -1732,3 +1732,45 @@ this notice does not acknowledge or operate the physical display.
 Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.
 
 Screw pitch and alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of the same name on Bed Levelling → Bed alignment (tilt span, the shape-warning and nearly-flat limits, screw positions, row order of the mesh and the screw pitch, 0.3 to 1.5 mm per turn, saved in the browser); without it the page uses the CC2 defaults, among them the CC2's own M4 screw (0.7 mm per turn, clockwise seen from below raises the corner). It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.
+
+## Appearance and native-display customisation
+
+`GET /api/appearance` returns the versioned appearance document: active
+profile, dashboard (`theme`, `mode`, `layout`, density/font/scale/radius/spacing/
+animations and up to four layouts of allow-listed widgets), touchscreen
+selection, custom themes and profiles. `recovered` and `error` are read-only
+diagnostics; they are never stored. A document that cannot be read is reported
+with defaults, not rewritten.
+
+`PUT /api/appearance` accepts any subset of `activeProfile`, `dashboard`,
+`touchscreen`, `themes` and `version` (1). Unknown JSON members are ignored;
+invalid colours, identifiers, numbers, duplicate ids and unknown widgets are
+refused with `400` without changing the stored document. `POST
+/api/appearance/themes` inserts one custom theme, and `POST
+/api/appearance/profiles` one profile (optionally with its theme),
+`/profiles/apply` copies a profile into the active document,
+`/profiles/delete` removes a non-built-in profile and `/reset` restores
+defaults (`{"profiles":true}` also clears the libraries). Limits: 6 profiles,
+4 layouts, 8 themes, 9 widgets. The file is `appearance.json` next to
+`ui-preferences.json`, mode `0600`, with `appearance.json.bak` as the previous
+accepted version.
+
+`GET /api/display` is the capability and state report for the native
+touchscreen. `supported` is true only with a valid
+`cc2-display-manifest.json` in the active theme directory, a matching GUI
+hash, a safe active-theme link and a parseable asset list. The response
+includes `firmwareBase`, allow-listed `assets` with roles `boot`,
+`background` and `accent`, `fileCount`, `customizedCount`, `rebootRequired`,
+`recoveryRequired`, `phase`, `backupAvailable` and `error` (a stable reason
+identifier). Nothing is guessed from file names.
+
+`GET /api/display/asset?name=…` serves one allow-listed PNG only. `POST
+/api/display/apply` accepts an uncompressed tar of at most 4 MiB containing
+allow-listed names (each at most 512 KiB, PNG, exact manifest dimensions and
+valid chunk CRCs). The printer additionally requires idle state and no active
+update; it verifies every original into a baseline, writes atomically, reads
+back and rolls back on failure. A journal replays an interrupted apply at the
+next CC2 Control start. `POST /api/display/restore` restores the baseline and
+refuses files changed by another tool or a changed firmware display identity.
+Both actions require a complete printer reboot; the status clears the notice
+when the native GUI process restarts.
