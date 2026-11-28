@@ -385,11 +385,21 @@ static int disp_active_theme_ok(void) {
     struct stat st;
     if (lstat(link, &st) != 0) return 1; /* installed layouts that do not use the link */
     if (!S_ISLNK(st.st_mode)) { disp_set_error("display_active_theme_invalid"); return 0; }
-    char target[PATH_MAX_LOCAL], here[PATH_MAX_LOCAL], resolved[PATH_MAX_LOCAL];
+    char target[PATH_MAX_LOCAL];
     ssize_t n = readlink(link, target, sizeof(target) - 1);
     if (n <= 0) { disp_set_error("display_active_theme_invalid"); return 0; }
     target[n] = '\0';
-    if (!realpath(target, resolved) || !realpath(disp_theme_dir, here) || strcmp(here, resolved)) {
+    /* A caller-supplied realpath() result buffer must hold PATH_MAX bytes, even
+     * for a short name (glibc's fortified build refuses a smaller object, and
+     * PATH_MAX_LOCAL is 512); the NULL form lets libc allocate the canonical
+     * name, which is then freed here (POSIX.1-2008; also used in
+     * connections/io.h). */
+    char *resolved = realpath(target, NULL);
+    char *here = resolved ? realpath(disp_theme_dir, NULL) : NULL;
+    int same = resolved && here && !strcmp(here, resolved);
+    free(resolved);
+    free(here);
+    if (!same) {
         disp_set_error("display_active_theme_mismatch");
         return 0;
     }

@@ -13,9 +13,12 @@ int main(void) {
 #endif
   printf("PATH_MAX=%d\n", PATH_MAX);
   fflush(stdout);
-  char resolved[512];
-  char *result = realpath("/etc/resolv.conf", resolved);
+  /* Same form as the shipped resolver (connections/io.h): a caller buffer must
+   * hold PATH_MAX bytes for the fortified realpath(), and a 512-byte one does
+   * not, so libc allocates the canonical name. */
+  char *result = realpath("/etc/resolv.conf", NULL);
   if (!result) { perror("realpath"); return 1; }
   puts("LEGACY_REALPATH_RETURNED");
+  free(result);
   return 0;
 }

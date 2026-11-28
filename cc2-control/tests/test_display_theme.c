@@ -10,6 +10,22 @@
 #undef main
 #include <assert.h>
 
+/* The PNG and tar fixtures are released together at the end: the sanitizer CI
+ * job runs LeakSanitizer, which fails on a report even for a short-lived
+ * program, so every buffer the fixtures return is registered here. */
+#define FIXTURE_LIMIT 256
+static void *fixtures[FIXTURE_LIMIT];
+static int fixture_count;
+static void *fixture_buffer(size_t size) {
+    void *pointer = calloc(1, size);
+    assert(pointer && fixture_count < FIXTURE_LIMIT);
+    fixtures[fixture_count++] = pointer;
+    return pointer;
+}
+static void fixture_release(void) {
+    while (fixture_count) free(fixtures[--fixture_count]);
+}
+
 static unsigned char *png_bytes(int width, int height, unsigned char r, unsigned char g, unsigned char b, size_t *out) {
     size_t stride = (size_t)width * 4 + 1;
     size_t raw = stride * (size_t)height;
@@ -30,7 +46,7 @@ static unsigned char *png_bytes(int width, int height, unsigned char r, unsigned
     z[p++] = (unsigned char)(bsum >> 8); z[p++] = (unsigned char)bsum;
     z[p++] = (unsigned char)(a >> 8); z[p++] = (unsigned char)a;
     size_t cap = 8 + (12 + 13) + (12 + p) + 12;
-    unsigned char *outb = calloc(1, cap), *q = outb;
+    unsigned char *outb = fixture_buffer(cap), *q = outb;
     static const unsigned char sig[8] = {137,80,78,71,13,10,26,10};
     memcpy(q, sig, 8); q += 8;
 #define PUT32(v) do { *q++=(unsigned char)((v)>>24); *q++=(unsigned char)((v)>>16); *q++=(unsigned char)((v)>>8); *q++=(unsigned char)(v); } while(0)
@@ -57,7 +73,7 @@ typedef struct { char name[32]; unsigned char *data; size_t size; } tar_file;
 static unsigned char *make_tar(tar_file *files, int count, size_t *out) {
     size_t total = 1024;
     for (int i = 0; i < count; ++i) total += 512 + ((files[i].size + 511) / 512) * 512;
-    unsigned char *tar = calloc(1, total);
+    unsigned char *tar = fixture_buffer(total);
     assert(tar);
     size_t p = 0;
     for (int i = 0; i < count; ++i) {
@@ -445,7 +461,8 @@ int main(void) {
     assert(disp_state_write());
 
     /* 8. The status endpoint stays responsive while an upload is streaming. */
-    snprintf(disp_theme_dir, sizeof(disp_theme_dir), "%s", theme_dir);
+    assert(strlen(theme_dir) < sizeof(disp_theme_dir));
+    memcpy(disp_theme_dir, theme_dir, strlen(theme_dir) + 1);
     snprintf(disp_gui_path, sizeof(disp_gui_path), "/tmp/cc2-display-gui");
     snprintf(path, sizeof(path), "%s/ui-preferences.json", root);
     ui_preferences_path = path;
@@ -532,6 +549,7 @@ int main(void) {
         assert(elapsed < 3000);
     }
 
+    fixture_release();
     printf("PASS: display pack validation, apply, baseline restore, foreign-change and firmware refusal, "
            "320-file capacity, responsive status, recovery\n");
     return 0;
