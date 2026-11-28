@@ -9,6 +9,13 @@ import {
   Folder,
   Grid3x3,
   House,
+  LayoutGrid,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Smartphone,
+  UserRound,
+  Download,
   History,
   Info,
   Layers,
@@ -33,6 +40,7 @@ import {
   Zap,
   Wifi,
   EthernetPort,
+  Wand2,
 } from 'lucide-preact'
 import { CanvasIcon } from '@/components/canvas-icon'
 
@@ -71,6 +79,14 @@ const icons = {
   motors: Power,
   spool: Spool,
   queue: ListOrdered,
+  sparkles: Sparkles,
+  layout: LayoutGrid,
+  profiles: UserRound,
+  save: Save,
+  transfer: Download,
+  restore: RotateCcw,
+  smartphone: Smartphone,
+  advanced: Wand2,
 }
 
 // Lucide icons (plus the Canvas glyph, drawn the same way), with a 1.75 px stroke everywhere.

@@ -16,6 +16,7 @@ export type Page =
   | 'spools'
   | 'pandabreath'
   | 'console'
+  | 'appearance'
   | 'settings'
 const PAGES: Page[] = [
   'dashboard',
@@ -29,6 +30,7 @@ const PAGES: Page[] = [
   'spools',
   'pandabreath',
   'console',
+  'appearance',
   'settings',
 ]
 
@@ -36,7 +38,26 @@ const PAGES: Page[] = [
 // #camera is the separate camera window opened from the camera card; it is not a menu page.
 export type BedTab = 'mesh' | 'plates' | 'align' | 'nozzle'
 export type SettingsTab = 'connection' | 'integrations' | 'appearance' | 'about' | 'updates' | 'backup'
+export type AppearanceTab =
+  | 'overview'
+  | 'themes'
+  | 'layout'
+  | 'widgets'
+  | 'touchscreen'
+  | 'profiles'
+  | 'transfer'
+  | 'advanced'
 const SETTINGS_TABS: SettingsTab[] = ['connection', 'integrations', 'appearance', 'about', 'updates', 'backup']
+const APPEARANCE_TABS: AppearanceTab[] = [
+  'overview',
+  'themes',
+  'layout',
+  'widgets',
+  'touchscreen',
+  'profiles',
+  'transfer',
+  'advanced',
+]
 const route = () => {
   const [p, sub] = location.hash.slice(1).split('/')
   return {
@@ -48,6 +69,9 @@ const route = () => {
         ? sub
         : 'mesh') as BedTab,
     settings: (p === 'settings' && SETTINGS_TABS.includes(sub as SettingsTab) ? sub : 'connection') as SettingsTab,
+    appearance: (p === 'appearance' && APPEARANCE_TABS.includes(sub as AppearanceTab)
+      ? sub
+      : 'overview') as AppearanceTab,
     camera: p === 'camera',
   }
 }
@@ -65,6 +89,12 @@ export const openPage = (page: Page, bed: BedTab = 'mesh') => {
 
 export const openSettings = (tab: SettingsTab = 'connection') => {
   const hash = `#settings/${tab}`
+  if (location.hash === hash) nav.set(route())
+  else location.hash = hash
+}
+
+export const openAppearance = (tab: AppearanceTab = 'overview') => {
+  const hash = `#appearance/${tab}`
   if (location.hash === hash) nav.set(route())
   else location.hash = hash
 }

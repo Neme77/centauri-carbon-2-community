@@ -57,7 +57,8 @@ export const Dialog = ({
     addEventListener('keydown', key)
     return () => {
       removeEventListener('keydown', key)
-      previous?.focus?.()
+      if (previous?.isConnected) previous.focus?.()
+      else (document.querySelector<HTMLElement>('main') as HTMLElement | null)?.focus?.()
     }
   }, [])
   // The backdrop's one column is the room inside its padding (beside a desktop scrollbar too), and a dialog takes

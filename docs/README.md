@@ -18,6 +18,7 @@ different purposes. Experimental branches are not a published stable update.
 ## Using CC2 Control
 
 - [Application guide](CC2_CONTROL.md) and [screenshots](SCREENSHOTS.md).
+- [Appearance studio: themes, layouts, profiles and the native touchscreen scope](APPEARANCE.md).
 - [Print speed and flow](PRINT_TUNING.md).
 - [Object exclusion and the bed map](OBJECT-BED-MAP.md).
 - [Plate-library mesh readiness](PRINT_MESH_READINESS.md).

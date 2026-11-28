@@ -781,5 +781,135 @@
       "zh"
     ],
     "reason": "Spoolman is the product name; the rest is a numeric spool identifier, with no English prose to translate. The exact text and each admitted locale are pinned."
+  },
+  "appearance.group_text": {
+    "text": "Text",
+    "locales": [
+      "cs",
+      "de"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "appearance.open_touchscreen": {
+    "text": "Touchscreen",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "appearance.schema": {
+    "text": "Schema",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "appearance.spacing_normal": {
+    "text": "Normal",
+    "locales": [
+      "de",
+      "es",
+      "fr",
+      "tr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "appearance.theme": {
+    "text": "Theme",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by this locale catalog"
+  },
+  "appearance.themes": {
+    "text": "Themes",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by this locale catalog"
+  },
+  "appearance.token_blue": {
+    "text": "Information",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "appearance.touchscreen": {
+    "text": "Touchscreen",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "appearance.widgets": {
+    "text": "Widgets",
+    "locales": [
+      "de",
+      "es",
+      "fr"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "appearance.token_red": {
+    "text": "Error",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.animations": {
+    "text": "Animations",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.font_mono": {
+    "text": "Monospace",
+    "locales": [
+      "fr",
+      "pl"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "appearance.group_surfaces": {
+    "text": "Surfaces",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.token_accent": {
+    "text": "Accent",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.widget_accent": {
+    "text": "Accent",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.widget_compact": {
+    "text": "Compact",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in this language"
+  },
+  "appearance.font": {
+    "text": "Font",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by this locale catalog"
   }
 }

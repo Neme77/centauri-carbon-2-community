@@ -180,12 +180,24 @@ data or credentials. Decoder-layout attribution remains with
 | Filament | Canvas slots, external spool/TPU, local spool inventory, Spoolman connection, material profiles and reviewed RFID assignment where supported. |
 | Thermal and fans | Nozzle/bed targets, chamber heating and filament drying, native fans, optional EXHAUST minimum and flap controls. Accessory integrations depend on the connected hardware. |
 | Connections | Wi-Fi profiles, DHCP/static configuration and qualified USB Ethernet with confirmation/recovery. Unsupported adapters are not silently enabled. |
+| Appearance | Twelve browser themes, system theme, custom colour palettes, dashboard layouts and widgets, named profiles and import/export. Where the firmware exposes a verified display manifest, a reversible accent, dark-background and boot-artwork pack for the native touchscreen. |
 | Settings and upkeep | Themes and eleven languages, LAN-code configuration, selective app backups, updates with progress/logs, integrations and diagnostics. |
 
 Features and controls depend on the hardware and current printer state. The
 presence of an integration does not mean every accessory or combination has
 been physically qualified. See the [changelog](CHANGELOG.md),
 [testing guide](docs/TESTING.md) and [API documentation](cc2-control/docs/API.md).
+
+### Appearance studio
+
+Open **Appearance** in the sidebar for themes, custom colour tokens, dashboard
+layouts, widgets, profiles and import/export. The browser dashboard and the
+native touchscreen are separate systems: touchscreen changes are limited to the
+presentation files named by the firmware's display manifest, are reversible
+from a verified backup and require a complete reboot. Layout, fonts and icons
+on the touchscreen are not modified. See
+[docs/APPEARANCE.md](docs/APPEARANCE.md) for the supported, experimental and
+unsupported scope.
 
 ## CC2 Control in pictures
 

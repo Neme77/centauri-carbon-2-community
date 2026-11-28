@@ -7,7 +7,11 @@ from _websrc import SRC
 i18n = (SRC / "lib" / "i18n.ts").read_text(encoding="utf-8")
 css = (SRC / "index.css").read_text(encoding="utf-8")
 
-ids = re.findall(r"\{ id: '([a-z-]+)',", i18n)
+# Only the THEMES palette list is checked here. THEME_CHOICES also offers the
+# non-palette "auto" mode, which has no :root block by design.
+start = i18n.index("export const THEMES")
+end = i18n.index("const themeId", start)
+ids = re.findall(r"\{ id: '([a-z-]+)',", i18n[start:end])
 assert {"dark", "light"} <= set(ids), ids
 assert len(ids) == len(set(ids)), "duplicate theme id"
 

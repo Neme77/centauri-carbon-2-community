@@ -28,6 +28,16 @@ PRESERVED = {
     'images/home_menu_illustration_printer_light_on.png':
         '32d03b7b46acc68f5e0e0dedfb5930a8f091d44cc185c4036477d89f9e076ffb',
 }
+# Presentation resources the appearance studio may replace. The manifest is
+# installed next to them so CC2 Control can verify the exact baseline before a
+# write; firmware without it reports touchscreen customisation as unsupported.
+MANIFEST_NAME = 'cc2-display-manifest.json'
+BACKGROUND_ASSETS = {
+    'common_main_bg.png',
+    'common_background_home_menu.png',
+    'filament_background_popup.png',
+    'guide_boot_anim_bg.png',
+}
 
 
 def output_matches(name, data, expected):
@@ -75,6 +85,53 @@ def pins():
             raise RuntimeError('Original printer artwork must not be replaced')
         result[name] = (digest, digest)
     return result
+
+
+def display_manifest(gui_sha256=None, firmware_base='02.01.01.07'):
+    """Bounded description of the files the appearance studio may replace.
+
+    Roles are deliberately narrow: boot frames, dark backgrounds and the
+    recoloured accent glyphs. Layouts, fonts, icons outside that role and the
+    printer/Canvas artwork stay outside the contract.
+    """
+    authored = {entry['name']: (entry['width'], entry['height']) for entry in
+                json.loads((SOURCE / 'assets' / 'manifest.json').read_text(encoding='utf-8'))['assets']}
+    recolored = {entry['name']: (entry['width'], entry['height']) for entry in
+                 json.loads((SOURCE / 'recolor-plan.json').read_text(encoding='utf-8'))['assets']}
+    assets = []
+    for name, (_before, after) in sorted(pins().items()):
+        if not name.startswith('images/'):
+            continue
+        base = PurePosixPath(name).name
+        if base in recolored:
+            role = 'accent'
+        elif base in BACKGROUND_ASSETS:
+            role = 'background'
+        elif re.fullmatch(r'[0-9]+\.png', base):
+            role = 'boot'
+        else:
+            continue
+        size = authored.get(base) or recolored.get(base)
+        if not size:
+            raise RuntimeError('Manifest asset has no pinned dimensions: ' + base)
+        assets.append({'name': base, 'role': role, 'width': size[0],
+                       'height': size[1], 'sha256': after})
+    if not assets:
+        raise RuntimeError('Native display manifest would be empty')
+    return {'schema': 1, 'firmwareBase': firmware_base,
+            'guiSha256': gui_sha256 or GUI_SHA256, 'assets': assets}
+
+
+def write_manifest(root, gui_sha256=None, firmware_base='02.01.01.07'):
+    root = Path(root)
+    path = root / 'opt/inst/images/theme_default' / MANIFEST_NAME
+    data = (json.dumps(display_manifest(gui_sha256, firmware_base), sort_keys=True,
+                       separators=(',', ':')) + '\n').encode()
+    if len(data) > 32768:
+        raise RuntimeError('Native display manifest is too large')
+    path.write_bytes(data)
+    path.chmod(0o644)
+    return path
 
 
 def target(root, name):
@@ -131,7 +188,7 @@ def audit_images(root):
             raise RuntimeError('Native display firmware audit failed: ' + name)
 
 
-def install_images(root):
+def install_images(root, firmware_base='02.01.01.07', gui_sha256=None):
     """Install the reviewed PNG set independently of the GUI ELF port."""
     root = Path(root)
     expected = {name: digests for name, digests in pins().items()
@@ -155,6 +212,7 @@ def install_images(root):
         path.write_bytes(data)
         path.chmod(0o644)
     audit_images(root)
+    write_manifest(root, gui_sha256, firmware_base)
 
 
 def install(root):
@@ -199,3 +257,4 @@ def install(root):
             path.write_bytes(data)
             path.chmod(0o755 if name.startswith('gui/') else 0o644)
     audit(root)
+    write_manifest(root)

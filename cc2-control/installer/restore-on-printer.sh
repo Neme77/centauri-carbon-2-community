@@ -54,17 +54,19 @@ if [ -f "$BACKUP/printer-camera.before" ]; then camera_restore_startup "$BACKUP"
 if ! wait_stopped; then echo 'Service did not stop.' >&2; exit 1; fi
 @APP_BINDING_RESTORE_ROLLBACK@
 # Keep current preferences and access configuration when reverting binaries.
-for keep in cc2-control.conf material-presets.json ui-preferences.json bed-plates.json spools.json print-queue.json; do
+for keep in cc2-control.conf material-presets.json ui-preferences.json appearance.json appearance.json.bak bed-plates.json spools.json print-queue.json; do
     if [ -f "$TARGET/$keep" ]; then cp -p "$TARGET/$keep" "$BACKUP/$keep.restore-current"; fi
 done
+if [ -d "$TARGET/display-theme" ]; then cp -a "$TARGET/display-theme" "$BACKUP/display-theme.restore-current"; fi
 FAILED="/opt/usr/cc2-control-before-restore-$(date +%Y%m%d-%H%M%S)-$$"
 mv "$TARGET" "$FAILED"
 if ! cp -a "$BACKUP/installation" "$TARGET"; then
     rm -rf "$TARGET";mv "$FAILED" "$TARGET";"$INIT" start;exit 1
 fi
-for keep in cc2-control.conf material-presets.json ui-preferences.json bed-plates.json spools.json print-queue.json; do
+for keep in cc2-control.conf material-presets.json ui-preferences.json appearance.json appearance.json.bak bed-plates.json spools.json print-queue.json; do
     if [ -f "$BACKUP/$keep.restore-current" ]; then cp -p "$BACKUP/$keep.restore-current" "$TARGET/$keep"; fi
 done
+if [ -d "$BACKUP/display-theme.restore-current" ]; then cp -a "$BACKUP/display-theme.restore-current" "$TARGET/display-theme"; fi
 cp -p "$BACKUP/init.before" "$INIT"
 "$INIT" start
 echo "Previous build restored. Replaced installation retained at $FAILED"

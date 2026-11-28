@@ -1744,3 +1744,60 @@ Screw pitch and alignment settings: `POST /api/experiments` accepts `mesh-align-
 `POST /api/spoolman/sync` starts the regular sync immediately, bypassing only its two-minute timer. Uses saved settings and existing usage/import safeguards. Returns `202 {"ok":true}` when started or when an existing worker/results are already pending; repeated requests do not queue extra cycles. Disabled integration returns `409` (`spoolman_off`), missing/invalid URL `400` (`spoolman_no_url` / `spoolman_bad_url`), unavailable library `503`, and allocation/thread start failure `500` (`spoolman_start_failed`). Normal browser mutation guards apply.
 
 `GET /api/spoolman` additionally returns `busy`: true while a sync/send worker or its main-thread results are pending, false after those results have been applied. Reading status never starts a sync. Existing `result` and `last_sync` keep their meaning; clients should not report completion while `busy` is true.
+
+## Appearance and native-display customisation
+
+`GET /api/appearance` returns the versioned appearance document: active
+profile, dashboard (`theme`, `mode`, `layout`, density/font/scale/radius/spacing/
+animations and up to four layouts of allow-listed widgets), touchscreen
+selection, custom themes and profiles. `recovered` and `error` are read-only
+diagnostics; they are never stored. A document that cannot be read is reported
+with defaults, not rewritten.
+
+`PUT /api/appearance` accepts any subset of `activeProfile`, `dashboard`,
+`touchscreen`, `themes` and `version` (1). Unknown JSON members are ignored;
+invalid colours, identifiers, numbers, duplicate ids and unknown widgets are
+refused with `400` without changing the stored document. A successful save has
+been parsed back, so it can be read at the next start. A `themes` array is
+merged by id (never a replacement), so a stale browser cannot delete another
+browser's themes; use `POST /api/appearance/themes/delete` for removal. A single
+request body is limited to 16 KiB by the HTTP transport (the stored document
+may reach about 21 KiB), so a client changes one section at a time. `POST
+/api/appearance/themes` inserts one custom theme, and `POST
+/api/appearance/profiles` one profile (optionally with its theme),
+`/profiles/apply` copies a profile into the active document,
+`/profiles/delete` removes a non-built-in profile and `/reset` restores
+defaults (`{"profiles":true}` also clears the libraries). Limits: 6 profiles,
+4 layouts, 8 themes, 9 widgets. A custom theme id is `custom-` plus lowercase
+letters and single interior hyphens, at most 24 characters (the same shape the
+legacy preferences field accepts). The file is `appearance.json` next to
+`ui-preferences.json`, mode `0600`, with `appearance.json.bak` as the previous
+accepted version.
+
+`GET /api/display` is the capability and state report for the native
+touchscreen. `supported` is true only with a valid
+`cc2-display-manifest.json` in the active theme directory, a matching GUI
+hash, a safe active-theme link and a parseable asset list. The response
+includes `firmwareBase`, allow-listed `assets` with roles `boot`,
+`background` and `accent`, `fileCount`, `customizedCount`, `rebootRequired`,
+`recoveryRequired`, `phase`, `backupAvailable`, `restoreAvailable`,
+`firmwareChanged`, `stateValid`, `experimental` and `error` (a stable reason
+identifier). Nothing is guessed from file names. `restoreAvailable` is true
+when a verified baseline exists; it stays true (and `firmwareChanged` becomes
+true) when the current manifest or GUI no longer matches that baseline, so the
+originals remain reachable after an update.
+
+`GET /api/display/asset?name=…` serves one allow-listed PNG only. `POST
+/api/display/apply` accepts an uncompressed tar of at most 4 MiB containing
+allow-listed names (each at most 512 KiB, PNG, exact manifest dimensions and
+valid chunk CRCs). The printer additionally requires idle state and no active
+update; it verifies every original into a baseline, writes atomically, reads
+back and rolls back on failure. A journal replays an interrupted apply at the
+next CC2 Control start. `POST /api/display/restore` restores the baseline and
+refuses files changed by another tool or a changed firmware display identity.
+Both actions require a complete printer reboot; the status clears the notice
+when the native GUI process restarts. Restore does not require the current
+manifest to match: it verifies each backup against its recorded SHA-256 and
+only replaces a file that is the original or a version this feature recorded.
+An apply is refused while a baseline from a different firmware/GUI exists, so
+a new baseline is never written over originals from another version.

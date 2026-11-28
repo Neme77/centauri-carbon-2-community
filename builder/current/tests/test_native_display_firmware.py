@@ -43,4 +43,30 @@ class NativeFirmwareDisplayTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'audit failed'):
                 display.audit(root)
 
+    def test_display_manifest_is_bounded_and_role_scoped(self):
+        manifest = display.display_manifest()
+        self.assertEqual(manifest['schema'], 1)
+        self.assertEqual(manifest['guiSha256'], display.GUI_SHA256)
+        self.assertLess(len(manifest['assets']), 320)
+        names = {asset['name'] for asset in manifest['assets']}
+        self.assertIn('common_background_home_menu.png', names)
+        self.assertIn('0.png', names)
+        self.assertNotIn('home_menu_illustration_printer_light_off.png', names)
+        roles = {asset['role'] for asset in manifest['assets']}
+        self.assertEqual(roles, {'boot', 'background', 'accent'})
+        for asset in manifest['assets']:
+            self.assertRegex(asset['sha256'], r'^[a-f0-9]{64}$')
+            self.assertGreater(asset['width'], 0)
+            self.assertGreater(asset['height'], 0)
+            self.assertNotIn('/', asset['name'])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'opt/inst/images/theme_default'
+            folder.mkdir(parents=True)
+            path = display.write_manifest(root)
+            self.assertTrue(path.is_file())
+            self.assertLessEqual(path.stat().st_size, 32768)
+            self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['assets'],
+                             manifest['assets'])
+
 if __name__=='__main__': unittest.main()

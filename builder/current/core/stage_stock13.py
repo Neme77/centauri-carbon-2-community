@@ -153,7 +153,7 @@ def stage(root, app=None, ssh_dir=None, network_trial=False, *, stock07_gui=None
         if ssh_inputs:
             install_ssh(root, *ssh_inputs)
             audit_ssh(root)
-        install_images(root)
+        install_images(root, '02.01.01.13', hashlib.sha256(patched_gui).hexdigest())
         gui.write_bytes(patched_gui)
         camera.write_bytes(camera_candidate.read_bytes())
         daemon.write_bytes(patched_daemon)

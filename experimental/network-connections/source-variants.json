@@ -2,6 +2,11 @@
   "schema": 1,
   "base": "02.01.01.13",
   "variants": {
+    "json.h": {
+      "helper_sha256": "266ef0aa81dc6f7af7afd0df21f644d51d971153d4d300229943ca62222e316d",
+      "app_sha256": "7aa32c4c66d107b67af41b3929fde8eb2ed409c89e361ddd13953ca234475635",
+      "reason": "The app decoder is split into json_body.h plus a small and a large bounded wrapper so the appearance document and display manifest fit; the standalone helper keeps its self-contained single-file decoder."
+    },
     "boot.h": {
       "helper_sha256": "0c7457a1100b4e8494af220828ab8d545890e8e59f400bd033acb1e90995b4b4",
       "app_sha256": "fc8704176a4a558e553c706379595b3735cf03060d1c3073e3f1f63a4a6bfb43",

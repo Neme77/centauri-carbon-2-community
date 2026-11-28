@@ -49,6 +49,10 @@ jobs:
         run: npm run test:file-dates
       - name: Verify approved Dashboard controls and responsive layout
         run: npm run test:dashboard-style
+      - name: Appearance themes, custom tokens, layouts, widgets and profiles
+        run: npm run test:appearance
+      - name: Display pack budget from a realistic photo
+        run: npm run test:display-pack
       - name: Obsidian persistence and sidebar page sizing
         run: npm run test:obsidian-layout
       - name: Verify collapsed icons, mobile labels and Canvas rings

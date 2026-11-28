@@ -96,7 +96,47 @@
   --radius-card: 12px;
   --shadow-pop: 0 10px 34px -6px rgb(1 8 14 / .55), 0 2px 8px rgb(1 8 14 / .4);
   --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 45%, transparent);
+  --cc2-card-pad: 1rem;
+  --cc2-font-scale: 1;
+  --cc2-space: 1;
+  --cc2-font: "Inter", "Segoe UI", Arial, sans-serif;
 }
+/* Appearance studio. Every value is a bounded token set by lib/appearance.ts;
+   there is no user-supplied CSS. */
+:root[data-density="compact"] { --cc2-card-pad: .7rem; }
+:root[data-density="spacious"] { --cc2-card-pad: 1.3rem; }
+:root[data-font="system"] { --cc2-font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+:root[data-font="mono"] { --cc2-font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+:root[data-motion="off"] *, :root[data-motion="off"] ::before, :root[data-motion="off"] ::after {
+  animation-duration: .01ms !important;
+  transition-duration: .01ms !important;
+  scroll-behavior: auto !important;
+}
+:root[data-density="compact"] .cc2-main { padding: 8px; }
+:root[data-density="spacious"] .cc2-main { padding: 20px; }
+:root[data-density="compact"] .cc2-dashboard { gap: 10px; }
+:root[data-density="spacious"] .cc2-dashboard { gap: 18px; }
+/* Custom dashboard layouts: a flat, reorderable grid of individual widgets.
+   The classic layout keeps its hand-tuned composition and is the default. */
+.cc2-dashboard-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cc2-dashboard-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cc2-widget-cell[data-span="1"] { grid-column: span 1; }
+.cc2-widget-cell[data-span="2"] { grid-column: span 2; }
+.cc2-widget-cell[data-span="4"] { grid-column: 1 / -1; }
+.cc2-widget-cell[data-compact="true"] > section { padding: .65rem; }
+.cc2-widget-cell[data-compact="true"] .cc2-temp-tile { padding: .4rem; }
+.cc2-widget-cell > section { height: 100%; }
+@media (max-width: 900px) {
+  .cc2-dashboard-cols-2, .cc2-dashboard-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc2-widget-cell[data-span="4"] { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .cc2-dashboard-cols-2, .cc2-dashboard-cols-4 { grid-template-columns: minmax(0, 1fr); }
+  .cc2-widget-cell[data-span="1"], .cc2-widget-cell[data-span="2"], .cc2-widget-cell[data-span="4"] { grid-column: 1 / -1; }
+}
+.cc2-appearance [role="tablist"] { margin-bottom: .875rem; }
+.cc2-appearance fieldset:disabled { opacity: .55; }
+.cc2-appearance input[type="color"] { min-width: 2.25rem; }
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #eef1f4; --panel: #fff; --edge: #d3d9de; --text: #15191c; --muted: #566067; --field: #f3f5f7; --ink: #fff;
@@ -308,7 +348,7 @@
 :root[data-theme="rose"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 9%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 32%, transparent); }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--text); font: calc(14px * var(--cc2-font-scale)) / 1.45 var(--cc2-font); }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 main:focus { outline: none; } /* focus lands here after navigation, it is not a control */
 input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }

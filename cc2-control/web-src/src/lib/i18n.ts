@@ -49,8 +49,23 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
   { id: 'ember', label: 'Ember' },
   { id: 'rose', label: 'Rose' },
 ]
-const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as string) : 'dark')
+// `auto` follows the operating system; `custom`/`custom-<slug>` are themes the
+// appearance studio stores in /api/appearance (the identifier is still the only
+// thing the legacy preferences endpoint needs).
+// A custom theme id is stored by both /api/appearance and the legacy
+// /api/preferences field: "custom-" plus lowercase letters and single interior
+// hyphens, at most 24 characters (see lib/appearance.ts THEME_ID_MAX and
+// src/appearance.h AP_THEME_ID_MAX; test_theme_contract_static.py checks it).
+const customThemeId = (mode: string) =>
+  mode.length <= 24 && /^custom-[a-z](?:[a-z-]*[a-z])?$/.test(mode) && !mode.includes('--')
+const themeId = (mode: unknown) =>
+  typeof mode === 'string' &&
+  (THEMES.some(x => x.id === mode) || mode === 'auto' || mode === 'custom' || customThemeId(mode))
+    ? mode
+    : 'dark'
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })
+
+export const THEME_CHOICES: { id: string; key?: Key; label?: string }[] = [{ id: 'auto', label: 'System' }, ...THEMES]
 
 export const cameraPreferences = store({ persistent: false })
 export async function setPersistentCamera(persistent: boolean) {
@@ -146,7 +161,17 @@ export async function setLanguage(code: string, save = false) {
 export function setTheme(mode: string, save = false) {
   const m = themeId(mode)
   ls.set('cc2-theme', m)
-  document.documentElement.dataset.theme = m
+  // A custom palette has no :root block: the appearance module sets its
+  // tokens inline. Set the marker here so the first paint is already dark
+  // instead of flashing the default palette.
+  document.documentElement.dataset.theme =
+    m === 'auto'
+      ? matchMedia('(prefers-color-scheme: light)').matches
+        ? 'light'
+        : 'dark'
+      : m.startsWith('custom')
+        ? 'custom'
+        : m
   theme.set({ mode: m })
   if (save) persist({ theme: m })
 }
@@ -155,7 +180,10 @@ export async function loadUiPreferences() {
   try {
     const p = await boundedJson('/api/preferences')
     cameraPreferences.set({ persistent: p.camera_persistent === true })
-    setTheme(p.theme)
+    // The appearance document is the newer source of truth; its cached copy
+    // has already been applied before the first paint. Do not overwrite it
+    // with the legacy identifier while /api/appearance is still in flight.
+    if (!ls.get('cc2-appearance')) setTheme(p.theme)
     setQuickFromServer(p.quick_actions)
     await setLanguage(p.language || detectLanguage()) // empty: nothing saved on the printer yet
   } catch {
