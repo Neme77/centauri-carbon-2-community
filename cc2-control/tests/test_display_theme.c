@@ -156,6 +156,9 @@ int main(void) {
     /* No current_theme symlink: the module accepts installations without it. */
     char theme_dir[600];
     snprintf(theme_dir, sizeof(theme_dir), "%s/theme", root);
+    /* The fixture directory must fit the production buffer. Check the length,
+     * then copy exactly: never hand snprintf a source it may truncate (the
+     * -Wformat-truncation build rejects that), and never truncate a real path. */
     assert(strlen(theme_dir) < sizeof(disp_theme_dir));
     memcpy(disp_theme_dir, theme_dir, strlen(theme_dir) + 1);
     snprintf(disp_gui_path, sizeof(disp_gui_path), "/tmp/cc2-display-gui");
@@ -176,6 +179,26 @@ int main(void) {
     assert(disp_load_manifest(1));
     assert(!strcmp(disp_manifest_cache.firmware_base, "test-base"));
     assert(disp_manifest_cache.count == 2);
+
+    /* 0. An overlong theme directory is refused by the production length
+     * check, never silently truncated into a shorter path. */
+    {
+        char saved[sizeof(disp_theme_dir)];
+        memcpy(saved, disp_theme_dir, sizeof(saved));
+        memset(disp_theme_dir, 'a', sizeof(disp_theme_dir) - 1);
+        disp_theme_dir[0] = '/';
+        disp_theme_dir[sizeof(disp_theme_dir) - 1] = '\0';
+        disp_manifest_path[0] = '\0';
+        disp_manifest_cache.valid = 0;
+        disp_set_error("");
+        assert(!disp_load_manifest(1));
+        assert(strstr(disp_error, "too long"));
+        memcpy(disp_theme_dir, saved, sizeof(saved));
+        disp_manifest_path[0] = '\0';
+        disp_manifest_cache.valid = 0;
+        assert(disp_load_manifest(1));
+        assert(disp_manifest_cache.count == 2);
+    }
     char boot_hash[65], bg_hash[65];
     disp_sha_file("/tmp/cc2-display-original-bg", bg_hash);
     disp_sha_file("/tmp/" "cc2-display-original-bg", boot_hash); /* same for both in this fixture */

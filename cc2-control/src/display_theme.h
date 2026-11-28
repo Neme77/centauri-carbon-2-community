@@ -29,6 +29,18 @@
 #define CC2_DISPLAY_THEME_H
 
 #include "connections/json_large.h"
+#include <limits.h>
+
+/* realpath() requires a destination of PATH_MAX bytes, even when the resolved
+ * name is short: a smaller object is undefined behaviour and the fortified
+ * build refuses it outright. <limits.h> defines PATH_MAX on Linux, including
+ * the printer's glibc 2.23/Tina toolchain; where a platform leaves it
+ * indeterminate, Linux's maximum path length is the buffer its libc expects. */
+#if defined(PATH_MAX) && PATH_MAX > 0
+#define DISP_REALPATH_MAX PATH_MAX
+#else
+#define DISP_REALPATH_MAX 4096
+#endif
 
 #define DISP_MAX_ASSETS 320
 #define DISP_NAME_MAX 64
@@ -389,17 +401,11 @@ static int disp_active_theme_ok(void) {
     ssize_t n = readlink(link, target, sizeof(target) - 1);
     if (n <= 0) { disp_set_error("display_active_theme_invalid"); return 0; }
     target[n] = '\0';
-    /* A caller-supplied realpath() result buffer must hold PATH_MAX bytes, even
-     * for a short name (glibc's fortified build refuses a smaller object, and
-     * PATH_MAX_LOCAL is 512); the NULL form lets libc allocate the canonical
-     * name, which is then freed here (POSIX.1-2008; also used in
-     * connections/io.h). */
-    char *resolved = realpath(target, NULL);
-    char *here = resolved ? realpath(disp_theme_dir, NULL) : NULL;
-    int same = resolved && here && !strcmp(here, resolved);
-    free(resolved);
-    free(here);
-    if (!same) {
+    /* Both destinations hold PATH_MAX bytes (DISP_REALPATH_MAX), the size the
+     * fortified realpath() requires; the link and the active directory must
+     * resolve to the same directory, or the pack is refused. */
+    char resolved[DISP_REALPATH_MAX], here[DISP_REALPATH_MAX];
+    if (!realpath(target, resolved) || !realpath(disp_theme_dir, here) || strcmp(here, resolved)) {
         disp_set_error("display_active_theme_mismatch");
         return 0;
     }
