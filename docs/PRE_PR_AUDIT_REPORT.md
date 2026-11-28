@@ -28,14 +28,14 @@ release gate.
 | Item | Value |
 | --- | --- |
 | Branch | `feature/appearance-customization` |
-| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `6b3e6611`; `git log -1`) |
+| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `e65649c3`; `git log -1`) |
 | Code/merge commit | `80033f1d` (merge + audit fixes), then `1b8c0c70`, `e24e7a41`, `a939896f` (docs/test, final fixes, screenshot artifact removal), `76fbdba8` (duplicate-id import), `6b3e6611` (Ember/Rose upstream merge, addendum H) |
 | Upstream `origin/develop` | `b5968048` (moved twice during this audit: `3892a174` added gzip web delivery #449, Spoolman on-demand sync #451 and ELEGOO error texts #445; `b5968048` added the Ember/Rose themes #453, see addendum H) |
 | Merge base (original) | `a59ae640` |
 | Integrated with upstream | Yes: `b5968048` is an ancestor of HEAD; 0 behind |
-| Ahead of `origin/develop` | `b5968048..6b3e6611` plus the final snapshot commit (31 commits ahead, 0 behind at publication time) |
+| Ahead of `origin/develop` | `b5968048..e65649c3` plus the final snapshot commit (33 commits ahead, 0 behind) |
 | Working tree | clean (`git status --porcelain` empty) |
-| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), `6b3e6611` (second upstream merge), final snapshot commit |
+| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), `6b3e6611` (second upstream merge), `e65649c3` (CI compile/leak fixes), final snapshot commit |
 | Pushed / PR | **No push, no PR, no merge into upstream** |
 | Merge conflicts | none unresolved; generated web/builder files resolved by regeneration |
 
@@ -192,7 +192,7 @@ plain file that must fit in memory.
 | Command | Result |
 | --- | --- |
 | `python3 experimental/pr128-integration/sync_source.py` on the committed tree | regenerated `source.zip`, `prepare.py`, `firmware_builder.py`, `run_build.py` |
-| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; final `source.zip` sha256 `c4016b3e…`, pin `6b3e6611` (before addendum H: `f3e85e65…`, pin `76fbdba8`) |
+| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; final `source.zip` sha256 `d164836d…`, pin `e65649c3` (earlier: `c4016b3e…`/`6b3e6611`, `f3e85e65…`/`76fbdba8`) |
 | `python3 -m unittest discover -s builder/current/tests -p 'test_*.py'` | **Ran 61, 60 passed, 3 skipped, 1 failed only for missing `dash`/BusyBox** (`test_connections_firmware`) |
 
 ---
@@ -289,7 +289,7 @@ That commit was therefore integrated before publication:
 | Mode mapping | Ember is dark, Rose is light; `applyAppearance` derives the form-control colour scheme from `LIGHT_THEME_IDS`, so both custom and the newly light built-ins get `color-scheme: light` |
 | Tests added | `test:obsidian-layout` asserts both themes persist through `/api/preferences` and `/api/appearance`, keep their stored mode and colour scheme across a reload, and are seen by a fresh browser; `test:appearance` asserts both cards in the gallery and Rose/Ember stored as light/dark |
 | Counts | the studio now ships fourteen palettes; `CHANGELOG.md` and `docs/APPEARANCE.md` say fourteen |
-| Snapshot | regenerated again from the final committed tree (`6b3e6611`), last: pin `6b3e6611`, `source.zip` sha256 `c4016b3e…` |
+| Snapshot | regenerated again from the final committed tree (`e65649c3`), last: pin `e65649c3`, `source.zip` sha256 `d164836d…` |
 
 Verification after this integration (all re-run, not inherited):
 
@@ -312,3 +312,63 @@ Verification after this integration (all re-run, not inherited):
 The audit's verdict is unchanged: nothing in `b5968048` touches the display,
 restore, import or capacity code the audit examined, and the theme contract gate
 that would have caught an omission did fire and now passes.
+
+---
+
+## I. Addendum — the first CI run: fortified `realpath`, truncation and a harness leak
+
+The first CI run of PR #454 failed. Three distinct defects were involved; all
+are fixed in `e65649c3`, and the fixes were re-verified locally in the CI
+configurations.
+
+| Job | Result | Cause |
+| --- | --- | --- |
+| CC2 Control (host tests + ARM build) | failed to compile, 26 s | `realpath()` destination of 512 bytes |
+| CC2 Control (thread sanitizer) | failed to compile, 32 s | same |
+| Connections qualification / fixtures | failed to compile, 1 min | same |
+| CC2 Control (address,undefined sanitizer) | failed after 14 min | `-Wformat-truncation` in the display harness, then a LeakSanitizer report |
+| Web UI, Isolated UI preview, builder, reactor, payload | passed | — |
+
+**Why the audit missed the first one.** The CI hosts run ubuntu-26.04, whose
+compiler enables `_FORTIFY_SOURCE` by default; the audit host does not, so its
+`-Werror` builds were clean. The fortified `realpath()` accepts only `NULL` or
+a buffer of at least `PATH_MAX`; `disp_active_theme_ok()` passed
+`PATH_MAX_LOCAL` (512) arrays. Both calls now use `realpath(path, NULL)`
+(POSIX.1-2008, the form `connections/io.h` already used on the printer) and
+free the results on every path; the lstat, link-type, readlink and containment
+checks are untouched.
+
+**Why the ASan job went further.** AddressSanitizer suppresses the fortified
+inline, so the `realpath` call compiled there (verified with a three-line
+probe: `-O1 -D_FORTIFY_SOURCE=3` fails, the same line with
+`-fsanitize=address` compiles, with `-fsanitize=thread` it fails). It then hit
+`tests/test_display_theme.c`, where a 600-byte fixture path was copied into the
+512-byte production buffer with `snprintf`; `-Wall`'s `-Wformat-truncation`
+rejects that at the sanitizer's `-O1` under `-Werror`. The copy now asserts the
+path fits and copies it exactly, like the two neighbouring copies already did.
+
+**The third defect.** With that fixed, the harness ran and LeakSanitizer
+reported 15 leaked fixtures (27,940 bytes: 11 tar buffers from `make_tar`, 4
+PNGs from `png_bytes`). The harness now registers every fixture buffer and
+releases them before returning, so it is clean under LeakSanitizer.
+
+**Automatic safeguard.** `tests/test_path_buffers_static.py` fails if any call
+under `src/` passes a destination buffer to `realpath()` and checks that the
+active-theme check frees both allocated names. Because `TESTS` is a wildcard,
+it runs in every `make test`: host, address/undefined and thread sanitizer.
+It was negative-checked against the old form (it fails as intended).
+
+**Verification after the fix** (this host: no dash, no busybox, no ARM
+toolchain; the four dash-dependent tests are excluded, as before):
+
+| Configuration | Outcome |
+| --- | --- |
+| `make clean test … SANITIZE=thread EXTRA_CFLAGS='-Werror … -D_FORTIFY_SOURCE=3'` | **exit 0**, 1 831 PASS lines |
+| `make clean test … SANITIZE=address,undefined …` | **exit 0**, 1 830 PASS lines, **no LeakSanitizer report** |
+| `make clean test … EXTRA_CFLAGS='-Werror …'` (host) | **exit 0**, 1 830 PASS lines |
+| The three exact CI harness commands with `-D_FORTIFY_SOURCE=3` | `test_bed_drying`, `test_chamber_preheat`, `test_print_completion` compile and pass |
+| Backend with `-Os -Werror -D_FORTIFY_SOURCE=3` | compiles, no warnings |
+
+The ARM cross-build and its qemu regressions cannot run on this host; the CI
+job reports them. No claim of a green CI run is made here: the results above
+are local, and the CI verdict must come from GitHub after the push.
