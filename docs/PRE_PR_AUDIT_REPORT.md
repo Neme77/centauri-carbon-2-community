@@ -28,14 +28,14 @@ release gate.
 | Item | Value |
 | --- | --- |
 | Branch | `feature/appearance-customization` |
-| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `e65649c3`; `git log -1`) |
+| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `a9de86e9`; `git log -1`) |
 | Code/merge commit | `80033f1d` (merge + audit fixes), then `1b8c0c70`, `e24e7a41`, `a939896f` (docs/test, final fixes, screenshot artifact removal), `76fbdba8` (duplicate-id import), `6b3e6611` (Ember/Rose upstream merge, addendum H) |
 | Upstream `origin/develop` | `b5968048` (moved twice during this audit: `3892a174` added gzip web delivery #449, Spoolman on-demand sync #451 and ELEGOO error texts #445; `b5968048` added the Ember/Rose themes #453, see addendum H) |
 | Merge base (original) | `a59ae640` |
 | Integrated with upstream | Yes: `b5968048` is an ancestor of HEAD; 0 behind |
-| Ahead of `origin/develop` | `b5968048..e65649c3` plus the final snapshot commit (33 commits ahead, 0 behind) |
+| Ahead of `origin/develop` | `b5968048..a9de86e9` plus the final snapshot commit (37 commits ahead, 0 behind) |
 | Working tree | clean (`git status --porcelain` empty) |
-| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), `6b3e6611` (second upstream merge), `e65649c3` (CI compile/leak fixes), final snapshot commit |
+| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), `6b3e6611` (second upstream merge), `e65649c3`, `a9de86e9` (review round: PATH_MAX buffers, overlong-path proof, fixture cleanup), final snapshot commit |
 | Pushed / PR | **No push, no PR, no merge into upstream** |
 | Merge conflicts | none unresolved; generated web/builder files resolved by regeneration |
 
@@ -192,7 +192,7 @@ plain file that must fit in memory.
 | Command | Result |
 | --- | --- |
 | `python3 experimental/pr128-integration/sync_source.py` on the committed tree | regenerated `source.zip`, `prepare.py`, `firmware_builder.py`, `run_build.py` |
-| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; final `source.zip` sha256 `d164836d…`, pin `e65649c3` (earlier: `c4016b3e…`/`6b3e6611`, `f3e85e65…`/`76fbdba8`) |
+| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; final pin and SHA-256 are stated in addendum J and in the final snapshot commit (earlier: `d164836d…`/`e65649c3`, `c4016b3e…`/`6b3e6611`, `f3e85e65…`/`76fbdba8`) |
 | `python3 -m unittest discover -s builder/current/tests -p 'test_*.py'` | **Ran 61, 60 passed, 3 skipped, 1 failed only for missing `dash`/BusyBox** (`test_connections_firmware`) |
 
 ---
@@ -372,3 +372,118 @@ toolchain; the four dash-dependent tests are excluded, as before):
 The ARM cross-build and its qemu regressions cannot run on this host; the CI
 job reports them. No claim of a green CI run is made here: the results above
 are local, and the CI verdict must come from GitHub after the push.
+
+---
+
+## J. Review round — platform `PATH_MAX` buffers, overlong-path proof, fixture cleanup
+
+Neme's review of 2026-11-28 asked for the `realpath()` destinations to be
+sized to the **platform `PATH_MAX`** from the appropriate header (not the
+allocation form this audit had used as an interim fix), for the test path copy
+to be made safe without losing overlong-path coverage, and for the ARM/Tina
+toolchain to be checked. This section records what was done and what actually
+ran.
+
+### Production fix (`cc2-control/src/display_theme.h`)
+
+```c
+#include <limits.h>
+#if defined(PATH_MAX) && PATH_MAX > 0
+#define DISP_REALPATH_MAX PATH_MAX
+#else
+#define DISP_REALPATH_MAX 4096   /* Linux maximum path length */
+#endif
+...
+char resolved[DISP_REALPATH_MAX], here[DISP_REALPATH_MAX];
+if (!realpath(target, resolved) || !realpath(disp_theme_dir, here) ||
+    strcmp(here, resolved)) {
+    disp_set_error("display_active_theme_mismatch");
+    return 0;
+}
+```
+
+`lstat`, the link-type check, `readlink` and the resolved-directory equality
+comparison are unchanged, and a failure still reports
+`display_active_theme_mismatch`. The fallback is used only where the platform
+does not define `PATH_MAX`; on Linux (including the printer's glibc/Tina
+toolchain) `<limits.h>` provides 4096, so the fallback never replaces a real
+platform limit.
+
+Evidence for the size: the ARM sysroot preprocessor returns `PATH_MAX 4096`,
+and a threshold experiment against glibc's fortified declaration accepts
+exactly the documented boundary — `char[4095]` rejected, `char[4096]` accepted.
+
+### Test fix and overlong-path coverage (`cc2-control/tests/test_display_theme.c`)
+
+The valid fixture path is length-checked and copied exactly; no precision
+limit and no disabled warning. A new negative case sets a 511-byte theme
+directory and asserts the production refusal (`"too long"`), then restores the
+fixture and reloads the manifest. Removing or bypassing the production length
+check makes the new case fail with `display_theme_missing` instead.
+
+### Fixture ownership (LeakSanitizer)
+
+`make_tar()` (11 allocations) and `png_bytes()` (4) used to leak 27 940 bytes.
+A fixture registry now owns every returned buffer and releases all of them
+before the harness returns; LeakSanitizer runs with no report and no
+suppression.
+
+### Static guard (`tests/test_path_buffers_static.py`)
+
+Rewritten for the review contract. It scans `src/`, `tests/` and
+`experimental/network-connections/`; accepts only `NULL` or a destination
+declared `[PATH_MAX]` / `[DISP_REALPATH_MAX]`; requires `#include <limits.h>`
+and `#define DISP_REALPATH_MAX PATH_MAX` for the latter; checks both display
+arrays; and contains a synthetic negative case that must reject the original
+512-byte form. Reintroducing `PATH_MAX_LOCAL` in the real file fails the test
+(verified), and restoring the fix passes it.
+
+### Local verification (this host: no dash/busybox; four tests excluded)
+
+| Configuration | Outcome |
+| --- | --- |
+| TSan, `-Werror -D_FORTIFY_SOURCE=3` | **exit 0**, 1 831 PASS lines, no reports |
+| ASan/UBSan, same flags, LeakSanitizer active | **exit 0**, 1 830 PASS lines, no reports |
+| Host, `-Werror` | **exit 0**, 1 830 PASS lines |
+| Exact CI harnesses with fortify (`test_bed_drying`, `test_chamber_preheat`, `test_print_completion`) | compile and PASS |
+| Backend `-Os -Werror -D_FORTIFY_SOURCE=3` | compiles, no warnings |
+| Connections build + `test_http.py` (`CC2_NETWORK_STATUS_TEST`) | PASS |
+| `tests/test_connections_sources.py` | PASS |
+| Frontend `npm run check`, `npm run build` | PASS, byte-identical rebuild |
+| `test:appearance`, `test:obsidian-layout` | PASS (the latter after one rerun: a page-load timeout under host memory pressure) |
+
+The first ASan attempt failed once in `test_installer_gzip_copies.py` (the
+service exited 1; the test reuses a probed port). It passed standalone and in
+a clean rerun of the whole stage; no stray service was present. Recorded as a
+transient environment issue, not a defect.
+
+### ARM / target toolchain
+
+| Item | Result |
+| --- | --- |
+| Toolchain | Arm GNU Toolchain 13.3.Rel1, `arm-none-linux-gnueabihf-gcc` 13.3.1 |
+| Emulator | qemu-arm 7.2.0 |
+| Target `PATH_MAX` | 4096 (preprocessor) |
+| Cross-build, `-Os -Werror -D_FORTIFY_SOURCE=3 -static` | **PASS**, ARM EABI5, statically linked |
+| Smoke test under qemu | **PASS** (`/`, `/api/health`, `/api/preferences`) |
+| CI ARM regressions (3 emergency-stop, 6 maintenance) | 5 **PASS**; 4 fail to compile with `-Werror=type-limits` at `src/main.c:3663` |
+
+That `type-limits` diagnostic is **pre-existing**: the same four tests fail
+identically when compiled from `origin/develop` with this toolchain, and the
+upstream CI is green with Ubuntu's cross compiler, so it is specific to this
+locally downloaded Arm GNU 13.3 toolchain. It is unrelated to the appearance
+change and is not fixed here. The authoritative ARM build and smoke tests are
+the GitHub job, which must run on this head before the ARM requirement is
+considered satisfied.
+
+### Snapshot
+
+The source snapshot was regenerated from the final source commit (`a9de86e9`):
+pin `a9de86e9`, `source.zip` SHA-256
+`2b91d641b29b2384d4a6286791cb76c021b7fdec5ba3237b0886b3fec334f3ed`.
+
+### Remaining hardware work
+
+Unchanged: apply → full reboot → visual check → restore → reboot, and the
+interaction with the optional semi-original display style, on a real printer.
+No hardware was accessed.
